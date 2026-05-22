@@ -1,7 +1,7 @@
 stableaudio3-ios
 
 This repository contains Swift and Python code for running converted Stable
-Audio 3 Small Music weights on iOS with MLX Swift.
+Audio 3 Small Music and Small SFX weights on iOS with MLX Swift.
 
 No Stability AI or Google model weights are included in this repository.
 

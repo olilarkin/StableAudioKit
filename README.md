@@ -5,12 +5,11 @@
 Generate music and sound effects on iPhone with Stable Audio 3.
 
 This is an iOS app and runtime for running Stable Audio 3 locally with MLX
-Swift. You type a prompt, tap `Generate & Play`, and the app generates a short
+Swift. You type a prompt, tap play, and the app generates a short
 stereo WAV on the phone. No cloud server is needed.
 
-The current app runs `small-music`. The goal is to support the practical
-mobile-sized Stable Audio 3 models: `small-music`, `small-sfx`, and `medium`.
-The largest models are not the target here.
+The current app runs `small-music` and `small-sfx`. The next practical target is
+`medium`. The largest models are not the target here.
 
 ## Why This Exists
 
@@ -67,6 +66,7 @@ Download the official MLX weights:
 hf download stabilityai/stable-audio-3-optimized \
   --include "MLX/t5gemma_f16.npz" \
   --include "MLX/dit_sm-music_f16.npz" \
+  --include "MLX/dit_sm-sfx_f16.npz" \
   --include "MLX/same_s_decoder_f32.npz" \
   --local-dir Models/stable-audio-3-optimized
 ```
@@ -85,7 +85,7 @@ open StableAudio3iOS.xcodeproj
 ```
 
 In Xcode, choose your development team, select a real iPhone, and run. When the
-app opens, tap `Generate & Play`.
+app opens, choose Music or SFX, then tap play.
 
 ## What Gets Generated Locally
 
@@ -94,9 +94,11 @@ The conversion script creates these files under `Resources/Weights/`:
 ```text
 t5gemma_f16.safetensors
 dit_sm-music_f16.safetensors
+dit_sm-sfx_f16.safetensors
 same_s_decoder_f32.safetensors
 t5gemma_tokenizer.model
-sa3_conditioner.safetensors
+sa3_conditioner_sm-music.safetensors
+sa3_conditioner_sm-sfx.safetensors
 manifest.json
 ```
 
@@ -110,7 +112,7 @@ warm speed. Xcode logs look like this:
 ```text
 [SA3] cache hit DiT
 [SA3] step 1/4 320ms total=...
-[SA3] total 1800ms prompt="..." seconds=1.0 steps=4 latentLength=...
+[SA3] total 1800ms model=Small SFX prompt="..." seconds=1.0 steps=4 latentLength=...
 ```
 
 ## Build Check
@@ -129,9 +131,9 @@ xcodebuild -quiet \
 ## Notes
 
 - Use a real iPhone. The simulator is not useful for this.
-- The current working model is `small-music`.
-- `small-sfx` and `medium` are planned next targets.
-- The app becomes large when local weights are added, roughly 1.6 GB for the current preset.
+- The current working models are `small-music` and `small-sfx`.
+- `medium` is the next target.
+- The app becomes large when local weights are added, roughly 2.5 GB for both small models.
 
 ## License
 

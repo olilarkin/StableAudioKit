@@ -13,6 +13,7 @@ final class StableAudioViewModel: ObservableObject {
     @Published var prompt = "Tight acoustic drum kit groove, crisp snare, punchy kick, closed hi-hats, dry studio room, no melody"
     @Published var durationSeconds: Float = 5
     @Published var stepCount = 4
+    @Published var selectedModel: StableAudioModelKind = .smallMusic
     @Published var timingStatus = "Not run"
     @Published var weightStatuses: [WeightStatus] = []
 
@@ -30,7 +31,7 @@ final class StableAudioViewModel: ObservableObject {
             return "Generating locally"
         }
         if allWeightsReady {
-            return "Tap a style or drum hit to generate"
+            return "Tap a style or sound effect to generate"
         }
         return "Model files are not ready"
     }
@@ -44,7 +45,7 @@ final class StableAudioViewModel: ObservableObject {
             return pipelineStatus
         }
         if allWeightsReady {
-            return pipelineStatus == "Ready" ? "Ready" : pipelineStatus
+            return pipelineStatus == "Ready" ? "\(selectedModel.displayName) ready" : pipelineStatus
         }
         return "Missing model files"
     }
@@ -112,6 +113,7 @@ final class StableAudioViewModel: ObservableObject {
     }
 
     func applyPreset(_ preset: PromptPreset) {
+        selectedModel = preset.model
         prompt = preset.prompt
         durationSeconds = preset.duration
         stepCount = preset.steps
@@ -180,12 +182,13 @@ final class StableAudioViewModel: ObservableObject {
         let currentPrompt = prompt
         let currentDuration = durationSeconds
         let currentSteps = stepCount
+        let currentModel = selectedModel
 
         Task {
             let result: Swift.Result<StableAudioPipeline.Result, Error>
             do {
                 let startedAt = Date()
-                let output = try await pipeline.generate(prompt: currentPrompt, seconds: currentDuration, steps: currentSteps) { stage in
+                let output = try await pipeline.generate(model: currentModel, prompt: currentPrompt, seconds: currentDuration, steps: currentSteps) { stage in
                     let elapsedMilliseconds = Int((Date().timeIntervalSince(startedAt) * 1000).rounded())
                     print("[SA3][UI] \(stage) total=\(elapsedMilliseconds)ms")
                     Task { @MainActor in
@@ -199,7 +202,7 @@ final class StableAudioViewModel: ObservableObject {
 
             switch result {
             case .success(let output):
-                pipelineStatus = "Done \(String(format: "%.1f", output.duration))s, Tlat \(output.latentLength)"
+                pipelineStatus = "\(currentModel.title) done \(String(format: "%.1f", output.duration))s, Tlat \(output.latentLength)"
                 timingStatus = "\(Int((output.elapsedSeconds * 1000).rounded()))ms total"
                 do {
                     audioPlayer = try AVAudioPlayer(contentsOf: output.url)

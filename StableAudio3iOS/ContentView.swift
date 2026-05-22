@@ -9,6 +9,7 @@ struct ContentView: View {
         PromptPreset(
             title: "Lo-fi House",
             subtitle: "10s loop",
+            model: .smallMusic,
             prompt: "lofi house loop, 120 BPM",
             duration: 10,
             steps: 4,
@@ -18,6 +19,7 @@ struct ContentView: View {
         PromptPreset(
             title: "Festival",
             subtitle: "10s house",
+            model: .smallMusic,
             prompt: "House music that encapsulates the feeling of being at a festival in the sunny weather with all your friends 124 BPM",
             duration: 10,
             steps: 8,
@@ -27,6 +29,7 @@ struct ContentView: View {
         PromptPreset(
             title: "Piano Build",
             subtitle: "10s cinematic",
+            model: .smallMusic,
             prompt: "A beautiful piano arpeggio grows into a cinematic climax",
             duration: 10,
             steps: 8,
@@ -36,6 +39,7 @@ struct ContentView: View {
         PromptPreset(
             title: "Ambient",
             subtitle: "10s drone",
+            model: .smallMusic,
             prompt: "ambient drone",
             duration: 10,
             steps: 4,
@@ -44,10 +48,11 @@ struct ContentView: View {
         ),
     ]
 
-    private let drumHits: [PromptPreset] = [
+    private let sfxPrompts: [PromptPreset] = [
         PromptPreset(
             title: "Kick",
             subtitle: "punch",
+            model: .smallSFX,
             prompt: "Single punchy acoustic kick drum hit, dry studio sound, sharp transient, short decay, no rhythm, no melody",
             duration: 1,
             steps: 4,
@@ -57,6 +62,7 @@ struct ContentView: View {
         PromptPreset(
             title: "Snare",
             subtitle: "crisp",
+            model: .smallSFX,
             prompt: "Single crisp snare drum hit, tight room sound, sharp attack, short decay, no rhythm, no melody",
             duration: 1,
             steps: 4,
@@ -64,30 +70,33 @@ struct ContentView: View {
             accent: Color(red: 0.92, green: 0.28, blue: 0.34)
         ),
         PromptPreset(
-            title: "Hi-Hat",
-            subtitle: "tick",
-            prompt: "Single closed hi-hat tick, bright metallic click, very short decay, no rhythm, no melody",
+            title: "Whoosh",
+            subtitle: "quick",
+            model: .smallSFX,
+            prompt: "Short cinematic whoosh pass by, clean air movement, quick rise and decay, no music, no voice",
             duration: 1,
             steps: 4,
-            iconName: "sparkle",
+            iconName: "wind",
             accent: Color(red: 0.88, green: 0.68, blue: 0.05)
         ),
         PromptPreset(
-            title: "Tom",
-            subtitle: "low",
-            prompt: "Single low tom drum hit, resonant body, short room decay, no rhythm, no melody",
+            title: "Footstep",
+            subtitle: "wood",
+            model: .smallSFX,
+            prompt: "Single sneaker footstep on wooden floor, close microphone, short natural room tail, no music, no voice",
             duration: 1,
             steps: 4,
-            iconName: "circle.dashed",
+            iconName: "figure.walk",
             accent: Color(red: 0.16, green: 0.48, blue: 0.8)
         ),
         PromptPreset(
-            title: "Cymbal",
-            subtitle: "crash",
-            prompt: "Single short crash cymbal hit, bright metallic shimmer, quick decay, no rhythm, no melody",
+            title: "Glass",
+            subtitle: "break",
+            model: .smallSFX,
+            prompt: "Small glass bottle breaking on concrete, sharp impact, scattered tiny shards, dry room, no music, no voice",
             duration: 1,
             steps: 4,
-            iconName: "rays",
+            iconName: "sparkles",
             accent: Color(red: 0.95, green: 0.48, blue: 0.12)
         ),
     ]
@@ -102,7 +111,7 @@ struct ContentView: View {
                     playerPanel
                     promptComposer
                     musicPromptRow
-                    drumHitPad
+                    sfxPromptPad
                     statusHint
                 }
                 .padding(.horizontal, 22)
@@ -179,6 +188,7 @@ struct ContentView: View {
                 Text(viewModel.timingStatus)
                 Spacer()
                 Text("\(Int(viewModel.durationSeconds))s")
+                Text(viewModel.selectedModel.title)
                 Text(viewModel.stepCount == 4 ? "Fast" : "Better")
             }
             .font(.caption.weight(.medium))
@@ -200,7 +210,7 @@ struct ContentView: View {
             }
         }
         .frame(width: 44, height: 44)
-        .background(Color(red: 0.05, green: 0.68, blue: 0.48), in: Circle())
+        .background(modelAccent(viewModel.selectedModel), in: Circle())
     }
 
     private var promptComposer: some View {
@@ -209,6 +219,8 @@ struct ContentView: View {
                 sectionTitle("Prompt")
                 Spacer()
                 HStack(spacing: 6) {
+                    modelChip(.smallMusic)
+                    modelChip(.smallSFX)
                     qualityChip("Fast", steps: 4)
                     qualityChip("Better", steps: 8)
                 }
@@ -243,7 +255,7 @@ struct ContentView: View {
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.white)
                         .frame(width: 46, height: 46)
-                        .background(Color(red: 0.05, green: 0.68, blue: 0.48), in: Circle())
+                        .background(modelAccent(viewModel.selectedModel), in: Circle())
                 }
                 .buttonStyle(.plain)
                 .disabled(!viewModel.canGenerate)
@@ -271,12 +283,12 @@ struct ContentView: View {
         }
     }
 
-    private var drumHitPad: some View {
+    private var sfxPromptPad: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Drum Hits")
+            sectionTitle("Sound Effects")
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 5), spacing: 12) {
-                ForEach(drumHits) { preset in
-                    drumButton(preset)
+                ForEach(sfxPrompts) { preset in
+                    sfxButton(preset)
                 }
             }
         }
@@ -325,7 +337,7 @@ struct ContentView: View {
         .disabled(!viewModel.canGenerate)
     }
 
-    private func drumButton(_ preset: PromptPreset) -> some View {
+    private func sfxButton(_ preset: PromptPreset) -> some View {
         Button {
             viewModel.generatePreset(preset)
         } label: {
@@ -355,6 +367,34 @@ struct ContentView: View {
             .font(.caption2.weight(.bold))
             .foregroundStyle(Color.black.opacity(0.42))
             .tracking(1.4)
+    }
+
+    private func modelChip(_ model: StableAudioModelKind) -> some View {
+        Button {
+            viewModel.selectedModel = model
+        } label: {
+            Text(model.title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(viewModel.selectedModel == model ? .white : Color.black.opacity(0.55))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    viewModel.selectedModel == model
+                        ? modelAccent(model)
+                        : Color.white.opacity(0.72),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func modelAccent(_ model: StableAudioModelKind) -> Color {
+        switch model {
+        case .smallMusic:
+            return Color(red: 0.05, green: 0.68, blue: 0.48)
+        case .smallSFX:
+            return Color(red: 0.74, green: 0.35, blue: 0.86)
+        }
     }
 
     private func durationChip(_ seconds: Int) -> some View {
@@ -411,6 +451,7 @@ struct PromptPreset: Identifiable {
     var id: String { title }
     let title: String
     let subtitle: String
+    let model: StableAudioModelKind
     let prompt: String
     let duration: Float
     let steps: Int

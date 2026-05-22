@@ -3,14 +3,53 @@ import MLX
 import AVFoundation
 import SentencepieceTokenizer
 
+enum StableAudioModelKind: String, CaseIterable, Identifiable, Sendable {
+    case smallMusic
+    case smallSFX
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .smallMusic: return "Music"
+        case .smallSFX: return "SFX"
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .smallMusic: return "Small Music"
+        case .smallSFX: return "Small SFX"
+        }
+    }
+
+    var ditResourceName: String {
+        switch self {
+        case .smallMusic: return "dit_sm-music_f16"
+        case .smallSFX: return "dit_sm-sfx_f16"
+        }
+    }
+
+    var conditionerResourceName: String {
+        switch self {
+        case .smallMusic: return "sa3_conditioner_sm-music"
+        case .smallSFX: return "sa3_conditioner_sm-sfx"
+        }
+    }
+
+    var missingDiTFileName: String {
+        "\(ditResourceName).safetensors"
+    }
+}
+
 actor StableAudioPipeline {
     static let sampleRate = 44_100
     static let samplesPerLatent = 4_096
 
     private var cachedTokenizer: SentencepieceTokenizer?
     private var cachedT5Encoder: T5GemmaEncoder?
-    private var cachedConditioner: SA3Conditioning?
-    private var cachedDiTWeights: [String: MLXArray]?
+    private var cachedConditioners: [StableAudioModelKind: SA3Conditioning] = [:]
+    private var cachedDiTWeights: [StableAudioModelKind: [String: MLXArray]] = [:]
     private var cachedDecoder: SAMESDecoder?
 
     struct Result {
@@ -20,7 +59,7 @@ actor StableAudioPipeline {
         let elapsedSeconds: TimeInterval
     }
 
-    func generate(prompt: String, seconds: Float = 5, steps: Int = 8, seed: UInt64 = 20260522, progress: @escaping @Sendable (String) -> Void) throws -> Result {
+    func generate(model: StableAudioModelKind, prompt: String, seconds: Float = 5, steps: Int = 8, seed: UInt64 = 20260522, progress: @escaping @Sendable (String) -> Void) throws -> Result {
         let totalStartedAt = Date()
         let latentLength = Self.latentLength(for: seconds)
 
@@ -34,7 +73,7 @@ actor StableAudioPipeline {
             let conditioningStartedAt = Date()
             progress("Conditioning")
             Self.logStart("Conditioning", totalStartedAt: totalStartedAt)
-            let conditioner = try loadConditioner()
+            let conditioner = try loadConditioner(model: model)
             let conditioned = conditioner.makeConditioning(promptEncoding: promptEncoding, seconds: seconds)
             let crossAttention = conditioned.crossAttention.asType(.float16)
             let globalCondition = conditioned.globalCondition.asType(.float16)
@@ -47,7 +86,7 @@ actor StableAudioPipeline {
             let loadStartedAt = Date()
             progress("DiT load")
             Self.logStart("DiT load", totalStartedAt: totalStartedAt)
-            let dit = try loadDiT(latentLength: latentLength)
+            let dit = try loadDiT(model: model, latentLength: latentLength)
             Self.logEnd("DiT load", startedAt: loadStartedAt, totalStartedAt: totalStartedAt)
 
             let samplingStartedAt = Date()
@@ -85,7 +124,7 @@ actor StableAudioPipeline {
         Self.logEnd("Writing WAV", startedAt: wavStartedAt, totalStartedAt: totalStartedAt)
         progress("Done")
         let elapsedSeconds = Date().timeIntervalSince(totalStartedAt)
-        print("[SA3] total \(Self.formatMilliseconds(elapsedSeconds))ms prompt=\"\(prompt)\" seconds=\(seconds) steps=\(steps) latentLength=\(latentLength)")
+        print("[SA3] total \(Self.formatMilliseconds(elapsedSeconds))ms model=\(model.displayName) prompt=\"\(prompt)\" seconds=\(seconds) steps=\(steps) latentLength=\(latentLength)")
         return Result(url: url, duration: seconds, latentLength: latentLength, elapsedSeconds: elapsedSeconds)
     }
 
@@ -195,44 +234,51 @@ actor StableAudioPipeline {
         return encoder
     }
 
-    private func loadConditioner() throws -> SA3Conditioning {
-        if let cachedConditioner {
-            print("[SA3] cache hit conditioner")
+    private func loadConditioner(model: StableAudioModelKind) throws -> SA3Conditioning {
+        if let cachedConditioner = cachedConditioners[model] {
+            print("[SA3] cache hit conditioner \(model.displayName)")
             return cachedConditioner
         }
 
+        let fallbackMusicConditioner = model == .smallMusic
+            ? Bundle.main.url(
+                forResource: "sa3_conditioner",
+                withExtension: "safetensors",
+                subdirectory: "Weights"
+            )
+            : nil
         guard let url = Bundle.main.url(
-            forResource: "sa3_conditioner",
+            forResource: model.conditionerResourceName,
             withExtension: "safetensors",
             subdirectory: "Weights"
-        ) else {
-            throw WeightTensorLoaderError.missing("sa3_conditioner.safetensors")
+        ) ?? fallbackMusicConditioner else {
+            throw WeightTensorLoaderError.missing("\(model.conditionerResourceName).safetensors")
         }
 
-        print("[SA3] cache miss conditioner, loading weights")
+        print("[SA3] cache miss conditioner \(model.displayName), loading weights")
         let weights = try loadArrays(url: url, stream: .cpu)
         let conditioner = SA3Conditioning(weights: weights)
-        cachedConditioner = conditioner
+        cachedConditioners[model] = conditioner
         return conditioner
     }
 
-    private func loadDiT(latentLength: Int) throws -> DiTSmallMusic {
-        if let cachedDiTWeights {
-            print("[SA3] cache hit DiT")
+    private func loadDiT(model: StableAudioModelKind, latentLength: Int) throws -> DiTSmallMusic {
+        if let cachedDiTWeights = cachedDiTWeights[model] {
+            print("[SA3] cache hit DiT \(model.displayName)")
             return DiTSmallMusic(weights: cachedDiTWeights, latentLength: latentLength)
         }
 
         guard let url = Bundle.main.url(
-            forResource: "dit_sm-music_f16",
+            forResource: model.ditResourceName,
             withExtension: "safetensors",
             subdirectory: "Weights"
         ) else {
-            throw WeightTensorLoaderError.missing("dit_sm-music_f16.safetensors")
+            throw WeightTensorLoaderError.missing(model.missingDiTFileName)
         }
 
-        print("[SA3] cache miss DiT, loading weights")
+        print("[SA3] cache miss DiT \(model.displayName), loading weights")
         let weights = try loadArrays(url: url, stream: .cpu)
-        cachedDiTWeights = weights
+        cachedDiTWeights[model] = weights
         return DiTSmallMusic(weights: weights, latentLength: latentLength)
     }
 

@@ -21,6 +21,11 @@ FILES = [
         "fileName": "dit_sm-music_f16.safetensors",
     },
     {
+        "role": "DiT small-sfx",
+        "sourceFileName": "dit_sm-sfx_f16.npz",
+        "fileName": "dit_sm-sfx_f16.safetensors",
+    },
+    {
         "role": "same-s decoder",
         "sourceFileName": "same_s_decoder_f32.npz",
         "fileName": "same_s_decoder_f32.safetensors",
@@ -28,7 +33,19 @@ FILES = [
 ]
 
 TOKENIZER_FILE = "t5gemma_tokenizer.model"
-CONDITIONER_FILE = "sa3_conditioner.safetensors"
+LEGACY_CONDITIONER_FILE = "sa3_conditioner.safetensors"
+CONDITIONER_FILES = [
+    {
+        "role": "Conditioner small-music",
+        "sourceFileName": "dit_sm-music_f16.npz",
+        "fileName": "sa3_conditioner_sm-music.safetensors",
+    },
+    {
+        "role": "Conditioner small-sfx",
+        "sourceFileName": "dit_sm-sfx_f16.npz",
+        "fileName": "sa3_conditioner_sm-sfx.safetensors",
+    },
+]
 
 
 def convert_file(source: Path, target: Path) -> int:
@@ -60,6 +77,10 @@ def extract_conditioner(source: Path, target: Path) -> int:
     }
     mx.save_safetensors(str(target), conditioner)
     return target.stat().st_size
+
+
+def can_skip(target: Path) -> bool:
+    return target.exists() and target.stat().st_size > 0
 
 
 def main() -> None:
@@ -94,7 +115,7 @@ def main() -> None:
         if not source.exists():
             raise FileNotFoundError(source)
 
-        if args.skip_existing and target.exists():
+        if args.skip_existing and can_skip(target):
             size = target.stat().st_size
         else:
             size = convert_file(source, target)
@@ -110,30 +131,54 @@ def main() -> None:
 
     tokenizer_source = source_dir / "t5gemma_f16.npz"
     tokenizer_target = destination_dir / TOKENIZER_FILE
-    if args.skip_existing and tokenizer_target.exists():
+    if args.skip_existing and can_skip(tokenizer_target):
         tokenizer_size = tokenizer_target.stat().st_size
     else:
         tokenizer_size = extract_tokenizer(tokenizer_source, tokenizer_target)
+    manifest_files.append(
+        {
+            "role": "T5Gemma tokenizer",
+            "fileName": TOKENIZER_FILE,
+            "minimumBytes": tokenizer_size,
+            "sourceFileName": "t5gemma_f16.npz:TOKENIZER_MODEL",
+        }
+    )
 
-    conditioner_source = source_dir / "dit_sm-music_f16.npz"
-    conditioner_target = destination_dir / CONDITIONER_FILE
-    if args.skip_existing and conditioner_target.exists():
-        conditioner_size = conditioner_target.stat().st_size
-    else:
-        conditioner_size = extract_conditioner(conditioner_source, conditioner_target)
+    conditioner_manifest = []
+    for item in CONDITIONER_FILES:
+        conditioner_source = source_dir / item["sourceFileName"]
+        conditioner_target = destination_dir / item["fileName"]
+        if not conditioner_source.exists():
+            raise FileNotFoundError(conditioner_source)
+
+        if args.skip_existing and can_skip(conditioner_target):
+            conditioner_size = conditioner_target.stat().st_size
+        else:
+            conditioner_size = extract_conditioner(conditioner_source, conditioner_target)
+
+        manifest_item = {
+            "role": item["role"],
+            "fileName": item["fileName"],
+            "minimumBytes": conditioner_size,
+            "sourceFileName": item["sourceFileName"],
+        }
+        manifest_files.append(manifest_item)
+        conditioner_manifest.append(manifest_item)
+
+        if item["fileName"] == "sa3_conditioner_sm-music.safetensors":
+            legacy_target = destination_dir / LEGACY_CONDITIONER_FILE
+            if not (args.skip_existing and can_skip(legacy_target)):
+                legacy_target.write_bytes(conditioner_target.read_bytes())
 
     manifest = {
-        "model": "stabilityai/stable-audio-3-small-music",
+        "model": "stabilityai/stable-audio-3-small-music+stable-audio-3-small-sfx",
         "format": "safetensors",
         "tokenizer": {
             "fileName": TOKENIZER_FILE,
             "bytes": tokenizer_size,
             "tokenOffset": 0,
         },
-        "conditioner": {
-            "fileName": CONDITIONER_FILE,
-            "bytes": conditioner_size,
-        },
+        "conditioners": conditioner_manifest,
         "files": manifest_files,
     }
     manifest_path = destination_dir / "manifest.json"

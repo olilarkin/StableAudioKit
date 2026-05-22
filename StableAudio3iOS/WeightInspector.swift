@@ -62,10 +62,34 @@ struct WeightInspector {
                 sourceFileName: "dit_sm-music_f16.npz"
             ),
             WeightFile(
+                role: "DiT small-sfx",
+                fileName: "dit_sm-sfx_f16.safetensors",
+                minimumBytes: 850_000_000,
+                sourceFileName: "dit_sm-sfx_f16.npz"
+            ),
+            WeightFile(
                 role: "same-s decoder",
                 fileName: "same_s_decoder_f32.safetensors",
                 minimumBytes: 200_000_000,
                 sourceFileName: "same_s_decoder_f32.npz"
+            ),
+            WeightFile(
+                role: "T5Gemma tokenizer",
+                fileName: "t5gemma_tokenizer.model",
+                minimumBytes: 3_000_000,
+                sourceFileName: "t5gemma_f16.npz:TOKENIZER_MODEL"
+            ),
+            WeightFile(
+                role: "Conditioner small-music",
+                fileName: "sa3_conditioner_sm-music.safetensors",
+                minimumBytes: 700_000,
+                sourceFileName: "dit_sm-music_f16.npz"
+            ),
+            WeightFile(
+                role: "Conditioner small-sfx",
+                fileName: "sa3_conditioner_sm-sfx.safetensors",
+                minimumBytes: 700_000,
+                sourceFileName: "dit_sm-sfx_f16.npz"
             ),
         ]
     )
@@ -80,4 +104,3 @@ private extension WeightFile {
         (fileName as NSString).pathExtension
     }
 }
-

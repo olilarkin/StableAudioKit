@@ -4,9 +4,9 @@
 
 在 iPhone 上用 Stable Audio 3 生成音乐和音效。
 
-这是一个 iOS app 和 runtime，用 MLX Swift 在 iPhone 本地跑 Stable Audio 3。你输入 prompt，点 `Generate & Play`，app 就会在手机上生成一段短的双声道 WAV 并播放。不需要云端服务器。
+这是一个 iOS app 和 runtime，用 MLX Swift 在 iPhone 本地跑 Stable Audio 3。你输入 prompt，点播放，app 就会在手机上生成一段短的双声道 WAV 并播放。不需要云端服务器。
 
-当前 app 跑通的是 `small-music`。项目目标是支持几个适合移动端的 Stable Audio 3 模型：`small-music`、`small-sfx` 和 `medium`。最大的模型不是这个项目的目标。
+当前 app 跑通的是 `small-music` 和 `small-sfx`。下一个适合移动端的目标是 `medium`。最大的模型不是这个项目的目标。
 
 ## 这个项目解决什么
 
@@ -60,6 +60,7 @@ hf auth login
 hf download stabilityai/stable-audio-3-optimized \
   --include "MLX/t5gemma_f16.npz" \
   --include "MLX/dit_sm-music_f16.npz" \
+  --include "MLX/dit_sm-sfx_f16.npz" \
   --include "MLX/same_s_decoder_f32.npz" \
   --local-dir Models/stable-audio-3-optimized
 ```
@@ -77,7 +78,7 @@ xcodegen generate
 open StableAudio3iOS.xcodeproj
 ```
 
-在 Xcode 里选择你的开发团队，选择一台真实 iPhone，然后运行。app 打开后点 `Generate & Play`。
+在 Xcode 里选择你的开发团队，选择一台真实 iPhone，然后运行。app 打开后选择 Music 或 SFX，再点播放。
 
 ## 本地会生成哪些文件
 
@@ -86,9 +87,11 @@ open StableAudio3iOS.xcodeproj
 ```text
 t5gemma_f16.safetensors
 dit_sm-music_f16.safetensors
+dit_sm-sfx_f16.safetensors
 same_s_decoder_f32.safetensors
 t5gemma_tokenizer.model
-sa3_conditioner.safetensors
+sa3_conditioner_sm-music.safetensors
+sa3_conditioner_sm-sfx.safetensors
 manifest.json
 ```
 
@@ -101,7 +104,7 @@ manifest.json
 ```text
 [SA3] cache hit DiT
 [SA3] step 1/4 320ms total=...
-[SA3] total 1800ms prompt="..." seconds=1.0 steps=4 latentLength=...
+[SA3] total 1800ms model=Small SFX prompt="..." seconds=1.0 steps=4 latentLength=...
 ```
 
 ## 构建检查
@@ -120,9 +123,9 @@ xcodebuild -quiet \
 ## 注意
 
 - 请用真实 iPhone，模拟器不适合测这个。
-- 当前跑通的是 `small-music`。
-- `small-sfx` 和 `medium` 是下一步目标。
-- 加入本地权重后 app 会很大，当前预设的模型资源约 1.6 GB。
+- 当前跑通的是 `small-music` 和 `small-sfx`。
+- `medium` 是下一步目标。
+- 加入本地权重后 app 会很大，两个 small 模型资源约 2.5 GB。
 
 ## License
 

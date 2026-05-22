@@ -15,6 +15,7 @@ Swift package revisions are pinned in `project.yml`.
 The app can run converted weights derived from:
 
 - Stability AI Stable Audio 3 Small Music
+- Stability AI Stable Audio 3 Small SFX
 - Stability AI Stable Audio 3 Optimized MLX checkpoints
 - Google T5Gemma, redistributed with Stable Audio 3 for text conditioning
 
