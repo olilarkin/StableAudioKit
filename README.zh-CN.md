@@ -4,9 +4,9 @@
 
 在 iPhone 上用 Stable Audio 3 生成音乐和音效。
 
-这是一个简单的 iOS demo，用 MLX Swift 在 iPhone 本地跑 Stable Audio 3。你输入 prompt，点 `Generate & Play`，app 就会在手机上生成一段短的双声道 WAV 并播放。不需要云端服务器。
+这是一个 iOS app 和 runtime，用 MLX Swift 在 iPhone 本地跑 Stable Audio 3。你输入 prompt，点 `Generate & Play`，app 就会在手机上生成一段短的双声道 WAV 并播放。不需要云端服务器。
 
-当前 demo 跑通的是 `small-music`。项目目标是支持几个适合移动端的 Stable Audio 3 模型：`small-music`、`small-sfx` 和 `medium`。最大的模型不是这个项目的目标。
+当前 app 跑通的是 `small-music`。项目目标是支持几个适合移动端的 Stable Audio 3 模型：`small-music`、`small-sfx` 和 `medium`。最大的模型不是这个项目的目标。
 
 ## 这个项目解决什么
 

@@ -4,11 +4,11 @@
 
 Generate music and sound effects on iPhone with Stable Audio 3.
 
-This is a simple iOS demo for running Stable Audio 3 locally with MLX Swift. You
-type a prompt, tap `Generate & Play`, and the app generates a short stereo WAV
-on the phone. No cloud server is needed.
+This is an iOS app and runtime for running Stable Audio 3 locally with MLX
+Swift. You type a prompt, tap `Generate & Play`, and the app generates a short
+stereo WAV on the phone. No cloud server is needed.
 
-The current demo runs `small-music`. The goal is to support the practical
+The current app runs `small-music`. The goal is to support the practical
 mobile-sized Stable Audio 3 models: `small-music`, `small-sfx`, and `medium`.
 The largest models are not the target here.
 
