@@ -2,35 +2,42 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-在 iPhone 上用 MLX Swift 本地运行 Stable Audio 3 Small Music。
+在 iPhone 上用 Stable Audio 3 生成音乐和音效。
 
-这个项目是一个 iOS app 和运行时，用来在 Apple 设备上做文本生成音频。它会把官方 Stable Audio 3 optimized MLX checkpoint 转成 app 可以直接加载的 safetensors，用 MLX Swift 在设备端推理，生成音频后写成 WAV 并在 app 里播放。
+这是一个简单的 iOS demo，用 MLX Swift 在 iPhone 本地跑 Stable Audio 3。你输入 prompt，点 `Generate & Play`，app 就会在手机上生成一段短的双声道 WAV 并播放。不需要云端服务器。
 
-## 能做什么
+当前 demo 跑通的是 `small-music`。项目目标是支持几个适合移动端的 Stable Audio 3 模型：`small-music`、`small-sfx` 和 `medium`。最大的模型不是这个项目的目标。
 
-- 直接在 iPhone 上根据文字 prompt 生成双声道音频
-- 跑 Stable Audio 3 `small-music` 路径，使用 `same-s` decoder
-- 测试短创意素材，比如鼓点 groove、氛围 texture、riff、音乐 cue
-- 选择短时长预设做延迟测试：1s、2s、5s、10s、15s
-- 选择 4 或 8 个采样步
-- 第一次生成后保持 pipeline 常驻，后续生成复用已加载权重
-- 在 Xcode console 输出每个阶段耗时，包括 T5、DiT sampling、decoder、WAV 写入
+## 这个项目解决什么
 
-当前范围：
+Stable Audio 3 官方已经有 Mac 上的 MLX 路径。这个项目把这条路径搬到 iPhone 上：
 
-- 只支持 text-to-audio
-- 只支持 Stable Audio 3 Small Music
-- 目标是 iOS 17+ 真机
-- 本地端侧推理，不需要服务器
+- 把官方 MLX 权重转成 iOS app 方便加载的文件
+- 在 iOS app 里加载模型
+- 在手机本地生成音频
+- 模型第一次加载后保持常驻，后续生成更快
+- 输出真实设备上的生成耗时日志
+
+## 可以拿来试什么
+
+- 鼓点 groove
+- 短音乐 loop
+- 音效
+- 氛围 texture
+- one-shot 音频创意
+
+建议先用 `1s` 和 `4 steps` 测延迟。更在意质量时，再加时长或采样步数。
 
 ## 快速开始
+
+克隆仓库：
 
 ```bash
 git clone https://github.com/kellyvv/StableAudio3-IOS.git
 cd StableAudio3-IOS
 ```
 
-安装本地工具：
+安装工具：
 
 ```bash
 brew install xcodegen
@@ -39,13 +46,15 @@ source .venv/bin/activate
 pip install -U mlx numpy huggingface_hub
 ```
 
-使用已经接受 Stable Audio 3 和 Gemma 上游条款的 Hugging Face 账号登录：
+登录 Hugging Face：
 
 ```bash
 hf auth login
 ```
 
-下载官方 optimized MLX checkpoint：
+你需要先在 Hugging Face 上获得 Stable Audio 3 权重访问权限，并接受上游 Stability AI 和 Gemma 条款。
+
+下载官方 MLX 权重：
 
 ```bash
 hf download stabilityai/stable-audio-3-optimized \
@@ -55,24 +64,49 @@ hf download stabilityai/stable-audio-3-optimized \
   --local-dir Models/stable-audio-3-optimized
 ```
 
-为 iOS app 转换权重：
+转换成 iOS app 使用的格式：
 
 ```bash
 python3 Scripts/prepare_weights.py
 ```
 
-生成并打开 Xcode 工程：
+打开 app 工程：
 
 ```bash
 xcodegen generate
 open StableAudio3iOS.xcodeproj
 ```
 
-在 Xcode 里选择你的开发团队，选择一台真实 iPhone，然后运行 `StableAudio3iOS` scheme。app 会显示权重是否就绪，并提供 `Generate & Play` 按钮。
+在 Xcode 里选择你的开发团队，选择一台真实 iPhone，然后运行。app 打开后点 `Generate & Play`。
 
-## 命令行构建检查
+## 本地会生成哪些文件
 
-不签名也可以先验证工程能否构建：
+转换脚本会在 `Resources/Weights/` 下生成这些文件：
+
+```text
+t5gemma_f16.safetensors
+dit_sm-music_f16.safetensors
+same_s_decoder_f32.safetensors
+t5gemma_tokenizer.model
+sa3_conditioner.safetensors
+manifest.json
+```
+
+这些文件会被 git 忽略。这个仓库不直接提供模型权重。
+
+## 耗时
+
+第一次生成会加载模型，所以更慢。再生成一次，才是 warm 状态下的速度。Xcode 里会看到类似日志：
+
+```text
+[SA3] cache hit DiT
+[SA3] step 1/4 320ms total=...
+[SA3] total 1800ms prompt="..." seconds=1.0 steps=4 latentLength=...
+```
+
+## 构建检查
+
+不签名也可以先检查工程是否能构建：
 
 ```bash
 xcodebuild -quiet \
@@ -83,62 +117,15 @@ xcodebuild -quiet \
   build
 ```
 
-## 权重文件
+## 注意
 
-这个仓库不包含模型权重。转换完成后，app 会使用这些文件：
-
-```text
-Resources/Weights/t5gemma_f16.safetensors
-Resources/Weights/dit_sm-music_f16.safetensors
-Resources/Weights/same_s_decoder_f32.safetensors
-Resources/Weights/t5gemma_tokenizer.model
-Resources/Weights/sa3_conditioner.safetensors
-Resources/Weights/manifest.json
-```
-
-这些生成文件已被 git 忽略。
-
-## 耗时日志
-
-从 Xcode 运行 app，点击 `Generate & Play`。第一次生成会包含模型加载：
-
-```text
-[SA3] cache miss DiT, loading weights
-[SA3] step 1/4 320ms total=...
-[SA3] total 1800ms prompt="..." seconds=1.0 steps=4 latentLength=...
-```
-
-再生成一次可以测 warm latency。warm run 应该能看到 cache hit：
-
-```text
-[SA3] cache hit tokenizer
-[SA3] cache hit T5Gemma
-[SA3] cache hit DiT
-[SA3] cache hit decoder
-```
-
-如果想做后端式实验，先用 1s / 4 steps 测延迟，再根据质量和耗时决定是否增加时长或采样步。
-
-## 项目结构
-
-```text
-StableAudio3iOS/          SwiftUI app 和 MLX Swift runtime
-Scripts/prepare_weights.py  NPZ -> safetensors 转换脚本
-Resources/Weights/        本地生成权重，git 忽略
-project.yml               XcodeGen 工程配置
-```
-
-## 注意事项
-
-- 请用真实 iPhone 测试。Simulator 不代表目标 MLX/Metal 路径。
-- 第一次生成是 cold run。延迟数据看第二次或第三次更准确。
-- 权重放进 app 后包体会很大，模型资源约 1.6 GB，不含 app 额外开销。
-- 这是一个实用原型 runtime，不是完整的 Stable Audio 3 产品界面。
+- 请用真实 iPhone，模拟器不适合测这个。
+- 当前跑通的是 `small-music`。
+- `small-sfx` 和 `medium` 是下一步目标。
+- 加入本地权重后 app 会很大，当前预设的模型资源约 1.6 GB。
 
 ## License
 
-仓库代码使用 MIT License。
+这个仓库里的代码使用 MIT License。
 
-模型权重不包含在本仓库中，也不受本仓库 license 覆盖。Stable Audio 3 权重受 Stability AI Community License 约束；T5Gemma 组件受 Gemma Terms of Use 约束。
-
-下载、转换或分发任何模型权重前，请先阅读 `NOTICE` 和 `THIRD_PARTY_LICENSES.md`。
+模型权重不包含在本仓库里。Stable Audio 3 权重受 Stability AI Community License 约束；T5Gemma 受 Gemma Terms of Use 约束。下载、转换或分发权重前，请先阅读 `NOTICE` 和 `THIRD_PARTY_LICENSES.md`。
