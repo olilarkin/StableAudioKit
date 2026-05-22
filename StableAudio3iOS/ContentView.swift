@@ -8,36 +8,36 @@ struct ContentView: View {
     private let musicPrompts: [PromptPreset] = [
         PromptPreset(
             title: "Lo-fi House",
-            subtitle: "120 BPM loop",
+            subtitle: "10s loop",
             prompt: "lofi house loop, 120 BPM",
-            duration: 2,
+            duration: 10,
             steps: 4,
             iconName: "music.note",
             accent: Color(red: 0.05, green: 0.68, blue: 0.48)
         ),
         PromptPreset(
             title: "Festival",
-            subtitle: "sunny house",
+            subtitle: "10s house",
             prompt: "House music that encapsulates the feeling of being at a festival in the sunny weather with all your friends 124 BPM",
-            duration: 5,
+            duration: 10,
             steps: 8,
             iconName: "sun.max.fill",
             accent: Color(red: 0.94, green: 0.58, blue: 0.12)
         ),
         PromptPreset(
             title: "Piano Build",
-            subtitle: "cinematic",
+            subtitle: "10s cinematic",
             prompt: "A beautiful piano arpeggio grows into a cinematic climax",
-            duration: 5,
+            duration: 10,
             steps: 8,
             iconName: "pianokeys",
             accent: Color(red: 0.24, green: 0.48, blue: 0.9)
         ),
         PromptPreset(
             title: "Ambient",
-            subtitle: "soft drone",
+            subtitle: "10s drone",
             prompt: "ambient drone",
-            duration: 2,
+            duration: 10,
             steps: 4,
             iconName: "waveform",
             accent: Color(red: 0.62, green: 0.38, blue: 0.85)
@@ -209,12 +209,18 @@ struct ContentView: View {
                 sectionTitle("Prompt")
                 Spacer()
                 HStack(spacing: 6) {
-                    durationChip(1)
-                    durationChip(2)
-                    durationChip(5)
                     qualityChip("Fast", steps: 4)
                     qualityChip("Better", steps: 8)
                 }
+            }
+
+            HStack(spacing: 7) {
+                durationChip(1)
+                durationChip(5)
+                durationChip(10)
+                durationChip(15)
+                durationChip(30)
+                Spacer(minLength: 0)
             }
 
             HStack(alignment: .center, spacing: 10) {

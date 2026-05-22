@@ -11,7 +11,7 @@ final class StableAudioViewModel: ObservableObject {
     @Published var tensorLoadStatus = "Not loaded"
     @Published var t5Status = "Not run"
     @Published var prompt = "Tight acoustic drum kit groove, crisp snare, punchy kick, closed hi-hats, dry studio room, no melody"
-    @Published var durationSeconds: Float = 1
+    @Published var durationSeconds: Float = 5
     @Published var stepCount = 4
     @Published var timingStatus = "Not run"
     @Published var weightStatuses: [WeightStatus] = []
