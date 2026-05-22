@@ -122,6 +122,11 @@ final class StableAudioViewModel: ObservableObject {
         pipelineStatus = allWeightsReady ? "Ready" : "Missing weights"
     }
 
+    func generatePreset(_ preset: PromptPreset) {
+        applyPreset(preset)
+        generate()
+    }
+
     func loadDecoderWeights() {
         guard !isRunning else { return }
         isRunning = true
