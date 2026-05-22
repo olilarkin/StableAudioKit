@@ -55,7 +55,7 @@ struct ContentView: View {
             model: .smallSFX,
             prompt: "Single punchy acoustic kick drum hit, dry studio sound, sharp transient, short decay, no rhythm, no melody",
             duration: 1,
-            steps: 4,
+            steps: 2,
             iconName: "circle.fill",
             accent: Color(red: 0.07, green: 0.66, blue: 0.44)
         ),
@@ -65,7 +65,7 @@ struct ContentView: View {
             model: .smallSFX,
             prompt: "Single crisp snare drum hit, tight room sound, sharp attack, short decay, no rhythm, no melody",
             duration: 1,
-            steps: 4,
+            steps: 2,
             iconName: "asterisk",
             accent: Color(red: 0.92, green: 0.28, blue: 0.34)
         ),
@@ -437,6 +437,7 @@ struct ContentView: View {
     }
 
     private func qualityTitle(for steps: Int) -> String {
+        if steps <= 2 { return "2 steps" }
         if steps >= 16 { return "Best" }
         if steps >= 8 { return "Better" }
         return "Fast"
