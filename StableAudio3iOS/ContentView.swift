@@ -12,6 +12,27 @@ struct ContentView: View {
             steps: 4
         ),
         PromptPreset(
+            title: "Breakbeat",
+            subtitle: "funk drums",
+            prompt: "Funky breakbeat drum loop, punchy acoustic kick, snappy snare, lively hi-hats, tight room sound, no melody",
+            duration: 2,
+            steps: 4
+        ),
+        PromptPreset(
+            title: "808",
+            subtitle: "trap drums",
+            prompt: "Modern trap drum pattern, deep 808 kick, crisp snare, rapid hi-hat rolls, clean club mix, no melody",
+            duration: 2,
+            steps: 4
+        ),
+        PromptPreset(
+            title: "Rock Kit",
+            subtitle: "live room",
+            prompt: "Live rock drum kit, powerful kick, big snare, open hi-hats, tom fills, energetic room sound, no melody",
+            duration: 2,
+            steps: 4
+        ),
+        PromptPreset(
             title: "Lo-fi",
             subtitle: "120 BPM",
             prompt: "lofi house loop, 120 BPM",
@@ -180,7 +201,7 @@ struct PromptPreset: Identifiable {
 
     var iconName: String {
         switch title {
-        case "Drums":
+        case "Drums", "Breakbeat", "808", "Rock Kit":
             "drumsticks"
         case "Piano":
             "pianokeys"
