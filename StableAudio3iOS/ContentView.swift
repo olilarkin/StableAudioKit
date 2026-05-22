@@ -4,197 +4,248 @@ struct ContentView: View {
     @StateObject private var viewModel = StableAudioViewModel()
     @State private var showsCustomPrompt = false
 
+    private let waveBars: [CGFloat] = [0.28, 0.62, 0.42, 0.86, 0.55, 0.35, 0.74, 0.48, 0.92, 0.66, 0.38, 0.58, 0.82, 0.44, 0.7, 0.32]
+
     private let musicPrompts: [PromptPreset] = [
         PromptPreset(
             title: "Lo-fi House",
-            subtitle: "lofi house loop, 120 BPM",
+            subtitle: "120 BPM loop",
             prompt: "lofi house loop, 120 BPM",
             duration: 2,
             steps: 4,
-            iconName: "music.note"
+            iconName: "music.note",
+            accent: Color(red: 0.26, green: 0.88, blue: 0.68)
         ),
         PromptPreset(
-            title: "Festival House",
-            subtitle: "sunny friends, 124 BPM",
+            title: "Festival",
+            subtitle: "sunny house",
             prompt: "House music that encapsulates the feeling of being at a festival in the sunny weather with all your friends 124 BPM",
             duration: 5,
             steps: 8,
-            iconName: "music.note"
+            iconName: "sun.max.fill",
+            accent: Color(red: 1.0, green: 0.74, blue: 0.28)
         ),
         PromptPreset(
             title: "Piano Build",
-            subtitle: "cinematic arpeggio climax",
+            subtitle: "cinematic",
             prompt: "A beautiful piano arpeggio grows into a cinematic climax",
             duration: 5,
             steps: 8,
-            iconName: "pianokeys"
+            iconName: "pianokeys",
+            accent: Color(red: 0.42, green: 0.7, blue: 1.0)
         ),
         PromptPreset(
-            title: "Ambient Drone",
-            subtitle: "soft sustained texture",
+            title: "Ambient",
+            subtitle: "soft drone",
             prompt: "ambient drone",
             duration: 2,
             steps: 4,
-            iconName: "waveform"
+            iconName: "waveform",
+            accent: Color(red: 0.82, green: 0.54, blue: 1.0)
         ),
     ]
 
     private let drumHits: [PromptPreset] = [
         PromptPreset(
             title: "Kick",
-            subtitle: "short punch",
+            subtitle: "punch",
             prompt: "Single punchy acoustic kick drum hit, dry studio sound, sharp transient, short decay, no rhythm, no melody",
             duration: 1,
             steps: 4,
-            iconName: "drumsticks"
+            iconName: "circle.fill",
+            accent: Color(red: 0.24, green: 0.86, blue: 0.58)
         ),
         PromptPreset(
             title: "Snare",
-            subtitle: "crisp hit",
+            subtitle: "crisp",
             prompt: "Single crisp snare drum hit, tight room sound, sharp attack, short decay, no rhythm, no melody",
             duration: 1,
             steps: 4,
-            iconName: "drumsticks"
+            iconName: "asterisk",
+            accent: Color(red: 1.0, green: 0.45, blue: 0.45)
         ),
         PromptPreset(
             title: "Hi-Hat",
-            subtitle: "closed tick",
+            subtitle: "tick",
             prompt: "Single closed hi-hat tick, bright metallic click, very short decay, no rhythm, no melody",
             duration: 1,
             steps: 4,
-            iconName: "drumsticks"
+            iconName: "sparkle",
+            accent: Color(red: 0.98, green: 0.88, blue: 0.36)
         ),
         PromptPreset(
             title: "Tom",
-            subtitle: "low hit",
+            subtitle: "low",
             prompt: "Single low tom drum hit, resonant body, short room decay, no rhythm, no melody",
             duration: 1,
             steps: 4,
-            iconName: "drumsticks"
+            iconName: "circle.dashed",
+            accent: Color(red: 0.42, green: 0.7, blue: 1.0)
         ),
         PromptPreset(
             title: "Cymbal",
-            subtitle: "short crash",
+            subtitle: "crash",
             prompt: "Single short crash cymbal hit, bright metallic shimmer, quick decay, no rhythm, no melody",
             duration: 1,
             steps: 4,
-            iconName: "drumsticks"
+            iconName: "rays",
+            accent: Color(red: 0.96, green: 0.6, blue: 0.26)
         ),
     ]
 
     var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 14) {
-                header
-                musicPromptScroller
-                drumHitScroller
-                status
-                customPrompt
-                Spacer(minLength: 0)
-            }
-            .padding(20)
-            .navigationTitle("Stable Audio 3")
-            .navigationBarTitleDisplayMode(.inline)
-            .task {
-                viewModel.bootstrap()
-            }
-        }
-    }
+        ZStack {
+            background
 
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text("Generate audio on iPhone")
-                .font(.title2.weight(.semibold))
-            Text(viewModel.heroStatus)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-        }
-    }
-
-    private var musicPromptScroller: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionTitle("Music Prompts")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(musicPrompts) { preset in
-                        presetButton(preset, width: 190, height: 86)
-                    }
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 18) {
+                    topBar
+                    playerPanel
+                    promptRow
+                    drumPad
+                    statusCard
+                    customPrompt
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 18)
+                .padding(.bottom, 28)
             }
+        }
+        .preferredColorScheme(.dark)
+        .task {
+            viewModel.bootstrap()
         }
     }
 
-    private var drumHitScroller: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            sectionTitle("Drum Hits")
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(drumHits) { preset in
-                        presetButton(preset, width: 88, height: 74)
-                    }
-                }
-            }
-        }
+    private var background: some View {
+        LinearGradient(
+            colors: [
+                Color(red: 0.05, green: 0.055, blue: 0.07),
+                Color(red: 0.015, green: 0.017, blue: 0.022),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
     }
 
-    private func sectionTitle(_ text: String) -> some View {
-        Text(text)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(.secondary)
-    }
-
-    private func presetButton(_ preset: PromptPreset, width: CGFloat, height: CGFloat) -> some View {
-        Button {
-            viewModel.generatePreset(preset)
-        } label: {
+    private var topBar: some View {
+        HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Image(systemName: preset.iconName)
-                    .font(.headline)
-                Text(preset.title)
-                    .font(.subheadline.weight(.semibold))
-                    .lineLimit(1)
-                Text(preset.subtitle)
+                Text("Stable Audio 3")
+                    .font(.title2.weight(.bold))
+                Text("Generate audio on iPhone")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
             }
-            .frame(width: width, height: height, alignment: .leading)
-            .padding(10)
-            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
+            Spacer()
+            Image(systemName: "waveform.circle.fill")
+                .font(.system(size: 34))
+                .foregroundStyle(Color(red: 0.26, green: 0.88, blue: 0.68))
         }
-        .buttonStyle(.plain)
-        .disabled(!viewModel.canGenerate)
     }
 
-    private var status: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Text(viewModel.shortStatus)
-                    .font(.subheadline.weight(.medium))
-                    .lineLimit(1)
+    private var playerPanel: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(viewModel.shortStatus)
+                        .font(.headline)
+                        .lineLimit(1)
+                    Text(viewModel.heroStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
                 Spacer()
-                Text(viewModel.timingStatus)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if viewModel.isRunning {
+                    ProgressView()
+                        .tint(.white)
+                } else {
+                    Image(systemName: "play.fill")
+                        .foregroundStyle(.black)
+                        .font(.headline)
+                        .frame(width: 38, height: 38)
+                        .background(Color(red: 0.26, green: 0.88, blue: 0.68), in: Circle())
+                }
             }
 
+            HStack(alignment: .center, spacing: 5) {
+                ForEach(Array(waveBars.enumerated()), id: \.offset) { index, value in
+                    Capsule()
+                        .fill(waveColor(index))
+                        .frame(width: 8, height: 78 * value)
+                        .frame(maxHeight: 78, alignment: .center)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 4)
+
+            HStack {
+                Text(viewModel.timingStatus)
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(Int(viewModel.durationSeconds))s")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                Text(viewModel.stepCount == 4 ? "Fast" : "Better")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(18)
+        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 22))
+        .overlay(
+            RoundedRectangle(cornerRadius: 22)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private var promptRow: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            label("Music Prompts")
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 12) {
+                    ForEach(musicPrompts) { preset in
+                        musicCard(preset)
+                    }
+                }
+            }
+        }
+    }
+
+    private var drumPad: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            label("Drum Hits")
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5), spacing: 10) {
+                ForEach(drumHits) { preset in
+                    drumButton(preset)
+                }
+            }
+        }
+    }
+
+    private var statusCard: some View {
+        Group {
             if viewModel.showPreparationHint {
                 Text("Model files are missing. Run the weight preparation script first.")
-                    .font(.caption)
+                    .font(.caption.weight(.medium))
                     .foregroundStyle(.orange)
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
             }
         }
-        .padding(12)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 10))
     }
 
     private var customPrompt: some View {
         DisclosureGroup("Custom Prompt", isExpanded: $showsCustomPrompt) {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 TextField("Describe the audio you want", text: $viewModel.prompt, axis: .vertical)
                     .lineLimit(3...4)
-                    .textFieldStyle(.roundedBorder)
+                    .padding(12)
+                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
 
                 Picker("Length", selection: $viewModel.durationSeconds) {
                     Text("1s").tag(Float(1))
@@ -216,12 +267,7 @@ struct ContentView: View {
                 } label: {
                     HStack {
                         Spacer()
-                        if viewModel.isRunning {
-                            ProgressView()
-                                .tint(.white)
-                        } else {
-                            Image(systemName: "play.fill")
-                        }
+                        Image(systemName: viewModel.isRunning ? "waveform" : "play.fill")
                         Text(viewModel.generateButtonTitle)
                             .font(.headline)
                         Spacer()
@@ -231,9 +277,88 @@ struct ContentView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(!viewModel.canGenerate)
             }
-            .padding(.top, 10)
+            .padding(.top, 12)
         }
         .font(.subheadline.weight(.semibold))
+        .padding(14)
+        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    private func musicCard(_ preset: PromptPreset) -> some View {
+        Button {
+            viewModel.generatePreset(preset)
+        } label: {
+            VStack(alignment: .leading, spacing: 10) {
+                Image(systemName: preset.iconName)
+                    .font(.title3)
+                    .foregroundStyle(preset.accent)
+                Spacer(minLength: 0)
+                Text(preset.title)
+                    .font(.headline)
+                    .lineLimit(1)
+                Text(preset.subtitle)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+            }
+            .frame(width: 168, height: 116, alignment: .leading)
+            .padding(14)
+            .background(
+                LinearGradient(
+                    colors: [preset.accent.opacity(0.24), Color.white.opacity(0.07)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                ),
+                in: RoundedRectangle(cornerRadius: 18)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(preset.accent.opacity(0.28), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!viewModel.canGenerate)
+    }
+
+    private func drumButton(_ preset: PromptPreset) -> some View {
+        Button {
+            viewModel.generatePreset(preset)
+        } label: {
+            VStack(spacing: 6) {
+                Image(systemName: preset.iconName)
+                    .font(.headline)
+                    .foregroundStyle(preset.accent)
+                Text(preset.title)
+                    .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+            }
+            .frame(height: 62)
+            .frame(maxWidth: .infinity)
+            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(preset.accent.opacity(0.35), lineWidth: 1)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(!viewModel.canGenerate)
+    }
+
+    private func label(_ text: String) -> some View {
+        Text(text.uppercased())
+            .font(.caption2.weight(.bold))
+            .foregroundStyle(.secondary)
+            .tracking(1.2)
+    }
+
+    private func waveColor(_ index: Int) -> Color {
+        let colors = [
+            Color(red: 0.26, green: 0.88, blue: 0.68),
+            Color(red: 0.42, green: 0.7, blue: 1.0),
+            Color(red: 1.0, green: 0.74, blue: 0.28),
+            Color(red: 1.0, green: 0.45, blue: 0.45),
+        ]
+        return colors[index % colors.count]
     }
 }
 
@@ -245,6 +370,7 @@ struct PromptPreset: Identifiable {
     let duration: Float
     let steps: Int
     let iconName: String
+    let accent: Color
 }
 
 #Preview {
