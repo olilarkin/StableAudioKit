@@ -31,16 +31,26 @@ final class StableAudioViewModel: ObservableObject {
 
     var heroStatus: String {
         if isRunning {
-            return "Generating locally. Keep the app open."
+            return "Generating locally"
         }
         if allWeightsReady {
-            return "Ready. Pick an example or write your own prompt."
+            return "Pick an example or write your own prompt"
         }
-        return "Model files are not ready yet."
+        return "Model files are not ready"
     }
 
     var showPreparationHint: Bool {
         !allWeightsReady && !weightStatuses.isEmpty
+    }
+
+    var shortStatus: String {
+        if isRunning {
+            return pipelineStatus
+        }
+        if allWeightsReady {
+            return pipelineStatus == "Ready" ? "Ready" : pipelineStatus
+        }
+        return "Missing model files"
     }
 
     var weightSummary: String {
