@@ -5,6 +5,13 @@ struct ContentView: View {
 
     private let presets: [PromptPreset] = [
         PromptPreset(
+            title: "Drum Kit",
+            subtitle: "tight dry groove",
+            prompt: "Tight acoustic drum kit groove, crisp snare, punchy kick, closed hi-hats, dry studio room, no melody",
+            duration: 1,
+            steps: 4
+        ),
+        PromptPreset(
             title: "Lo-fi House",
             subtitle: "120 BPM loop",
             prompt: "lofi house loop, 120 BPM",
@@ -163,6 +170,8 @@ struct PromptPreset: Identifiable {
 
     var iconName: String {
         switch title {
+        case "Drum Kit":
+            "drumsticks"
         case "Lo-fi House", "Festival House":
             "music.note"
         case "Piano Build":
