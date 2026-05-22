@@ -189,7 +189,7 @@ struct ContentView: View {
                 Spacer()
                 Text("\(Int(viewModel.durationSeconds))s")
                 Text(viewModel.selectedModel.title)
-                Text(viewModel.stepCount == 4 ? "Fast" : "Better")
+                Text(qualityTitle(for: viewModel.stepCount))
             }
             .font(.caption.weight(.medium))
             .foregroundStyle(Color.black.opacity(0.46))
@@ -223,6 +223,7 @@ struct ContentView: View {
                     modelChip(.smallSFX)
                     qualityChip("Fast", steps: 4)
                     qualityChip("Better", steps: 8)
+                    qualityChip("Best", steps: 16)
                 }
             }
 
@@ -433,6 +434,12 @@ struct ContentView: View {
                 )
         }
         .buttonStyle(.plain)
+    }
+
+    private func qualityTitle(for steps: Int) -> String {
+        if steps >= 16 { return "Best" }
+        if steps >= 8 { return "Better" }
+        return "Fast"
     }
 
     private func waveColor(_ index: Int) -> Color {
