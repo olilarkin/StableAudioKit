@@ -2,9 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @StateObject private var viewModel = StableAudioViewModel()
-    @State private var showsCustomPrompt = false
 
-    private let waveBars: [CGFloat] = [0.28, 0.62, 0.42, 0.86, 0.55, 0.35, 0.74, 0.48, 0.92, 0.66, 0.38, 0.58, 0.82, 0.44, 0.7, 0.32]
+    private let waveBars: [CGFloat] = [0.35, 0.62, 0.44, 0.82, 0.52, 0.38, 0.74, 0.48, 0.88, 0.58, 0.42, 0.68]
 
     private let musicPrompts: [PromptPreset] = [
         PromptPreset(
@@ -14,7 +13,7 @@ struct ContentView: View {
             duration: 2,
             steps: 4,
             iconName: "music.note",
-            accent: Color(red: 0.26, green: 0.88, blue: 0.68)
+            accent: Color(red: 0.05, green: 0.68, blue: 0.48)
         ),
         PromptPreset(
             title: "Festival",
@@ -23,7 +22,7 @@ struct ContentView: View {
             duration: 5,
             steps: 8,
             iconName: "sun.max.fill",
-            accent: Color(red: 1.0, green: 0.74, blue: 0.28)
+            accent: Color(red: 0.94, green: 0.58, blue: 0.12)
         ),
         PromptPreset(
             title: "Piano Build",
@@ -32,7 +31,7 @@ struct ContentView: View {
             duration: 5,
             steps: 8,
             iconName: "pianokeys",
-            accent: Color(red: 0.42, green: 0.7, blue: 1.0)
+            accent: Color(red: 0.24, green: 0.48, blue: 0.9)
         ),
         PromptPreset(
             title: "Ambient",
@@ -41,7 +40,7 @@ struct ContentView: View {
             duration: 2,
             steps: 4,
             iconName: "waveform",
-            accent: Color(red: 0.82, green: 0.54, blue: 1.0)
+            accent: Color(red: 0.62, green: 0.38, blue: 0.85)
         ),
     ]
 
@@ -53,7 +52,7 @@ struct ContentView: View {
             duration: 1,
             steps: 4,
             iconName: "circle.fill",
-            accent: Color(red: 0.24, green: 0.86, blue: 0.58)
+            accent: Color(red: 0.07, green: 0.66, blue: 0.44)
         ),
         PromptPreset(
             title: "Snare",
@@ -62,7 +61,7 @@ struct ContentView: View {
             duration: 1,
             steps: 4,
             iconName: "asterisk",
-            accent: Color(red: 1.0, green: 0.45, blue: 0.45)
+            accent: Color(red: 0.92, green: 0.28, blue: 0.34)
         ),
         PromptPreset(
             title: "Hi-Hat",
@@ -71,7 +70,7 @@ struct ContentView: View {
             duration: 1,
             steps: 4,
             iconName: "sparkle",
-            accent: Color(red: 0.98, green: 0.88, blue: 0.36)
+            accent: Color(red: 0.88, green: 0.68, blue: 0.05)
         ),
         PromptPreset(
             title: "Tom",
@@ -80,7 +79,7 @@ struct ContentView: View {
             duration: 1,
             steps: 4,
             iconName: "circle.dashed",
-            accent: Color(red: 0.42, green: 0.7, blue: 1.0)
+            accent: Color(red: 0.16, green: 0.48, blue: 0.8)
         ),
         PromptPreset(
             title: "Cymbal",
@@ -89,7 +88,7 @@ struct ContentView: View {
             duration: 1,
             steps: 4,
             iconName: "rays",
-            accent: Color(red: 0.96, green: 0.6, blue: 0.26)
+            accent: Color(red: 0.95, green: 0.48, blue: 0.12)
         ),
     ]
 
@@ -98,20 +97,20 @@ struct ContentView: View {
             background
 
             ScrollView(showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 24) {
                     topBar
                     playerPanel
-                    promptRow
-                    drumPad
-                    statusCard
-                    customPrompt
+                    promptComposer
+                    musicPromptRow
+                    drumHitPad
+                    statusHint
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 18)
-                .padding(.bottom, 28)
+                .padding(.horizontal, 22)
+                .padding(.bottom, 32)
             }
+            .safeAreaPadding(.top, 18)
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
         .task {
             viewModel.bootstrap()
         }
@@ -120,62 +119,57 @@ struct ContentView: View {
     private var background: some View {
         LinearGradient(
             colors: [
-                Color(red: 0.05, green: 0.055, blue: 0.07),
-                Color(red: 0.015, green: 0.017, blue: 0.022),
+                Color(red: 0.98, green: 0.97, blue: 0.94),
+                Color(red: 0.93, green: 0.97, blue: 0.95),
             ],
-            startPoint: .top,
-            endPoint: .bottom
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
     }
 
     private var topBar: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
+        HStack(alignment: .center) {
+            VStack(alignment: .leading, spacing: 3) {
                 Text("Stable Audio 3")
-                    .font(.title2.weight(.bold))
-                Text("Generate audio on iPhone")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Color(red: 0.08, green: 0.09, blue: 0.11))
+                Text("Music and sound effects on iPhone")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.black.opacity(0.48))
             }
             Spacer()
-            Image(systemName: "waveform.circle.fill")
-                .font(.system(size: 34))
-                .foregroundStyle(Color(red: 0.26, green: 0.88, blue: 0.68))
+            Image(systemName: "waveform")
+                .font(.system(size: 22, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 46, height: 46)
+                .background(Color(red: 0.05, green: 0.68, blue: 0.48), in: Circle())
         }
     }
 
     private var playerPanel: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(viewModel.shortStatus)
-                        .font(.headline)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color(red: 0.08, green: 0.09, blue: 0.11))
                         .lineLimit(1)
                     Text(viewModel.heroStatus)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.black.opacity(0.48))
                         .lineLimit(2)
                 }
                 Spacer()
-                if viewModel.isRunning {
-                    ProgressView()
-                        .tint(.white)
-                } else {
-                    Image(systemName: "play.fill")
-                        .foregroundStyle(.black)
-                        .font(.headline)
-                        .frame(width: 38, height: 38)
-                        .background(Color(red: 0.26, green: 0.88, blue: 0.68), in: Circle())
-                }
+                playbackGlyph
             }
 
-            HStack(alignment: .center, spacing: 5) {
+            HStack(alignment: .center, spacing: 6) {
                 ForEach(Array(waveBars.enumerated()), id: \.offset) { index, value in
                     Capsule()
                         .fill(waveColor(index))
-                        .frame(width: 8, height: 78 * value)
-                        .frame(maxHeight: 78, alignment: .center)
+                        .frame(width: 7, height: 58 * value)
+                        .frame(maxHeight: 58, alignment: .center)
                 }
             }
             .frame(maxWidth: .infinity)
@@ -183,30 +177,86 @@ struct ContentView: View {
 
             HStack {
                 Text(viewModel.timingStatus)
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(.secondary)
                 Spacer()
                 Text("\(Int(viewModel.durationSeconds))s")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
                 Text(viewModel.stepCount == 4 ? "Fast" : "Better")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
             }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(Color.black.opacity(0.46))
         }
         .padding(18)
-        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 22))
+        .background(.white.opacity(0.82), in: RoundedRectangle(cornerRadius: 22))
+        .shadow(color: Color.black.opacity(0.08), radius: 18, y: 8)
+    }
+
+    private var playbackGlyph: some View {
+        Group {
+            if viewModel.isRunning {
+                ProgressView()
+            } else {
+                Image(systemName: "play.fill")
+                    .font(.headline)
+                    .foregroundStyle(.white)
+            }
+        }
+        .frame(width: 44, height: 44)
+        .background(Color(red: 0.05, green: 0.68, blue: 0.48), in: Circle())
+    }
+
+    private var promptComposer: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                sectionTitle("Prompt")
+                Spacer()
+                HStack(spacing: 6) {
+                    durationChip(1)
+                    durationChip(2)
+                    durationChip(5)
+                    qualityChip("Fast", steps: 4)
+                    qualityChip("Better", steps: 8)
+                }
+            }
+
+            HStack(alignment: .center, spacing: 10) {
+                TextField("Write your own prompt", text: $viewModel.prompt, axis: .vertical)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(Color(red: 0.08, green: 0.09, blue: 0.11))
+                    .lineLimit(2...3)
+                    .padding(.vertical, 10)
+                    .padding(.horizontal, 12)
+                    .background(.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 16))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                    )
+
+                Button {
+                    viewModel.generate()
+                } label: {
+                    Image(systemName: viewModel.isRunning ? "waveform" : "play.fill")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(width: 46, height: 46)
+                        .background(Color(red: 0.05, green: 0.68, blue: 0.48), in: Circle())
+                }
+                .buttonStyle(.plain)
+                .disabled(!viewModel.canGenerate)
+                .opacity(viewModel.canGenerate ? 1 : 0.45)
+            }
+        }
+        .padding(14)
+        .background(.white.opacity(0.76), in: RoundedRectangle(cornerRadius: 20))
         .overlay(
-            RoundedRectangle(cornerRadius: 22)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white.opacity(0.72), lineWidth: 1)
         )
     }
 
-    private var promptRow: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            label("Music Prompts")
+    private var musicPromptRow: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("Music Prompts")
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
+                HStack(spacing: 14) {
                     ForEach(musicPrompts) { preset in
                         musicCard(preset)
                     }
@@ -215,10 +265,10 @@ struct ContentView: View {
         }
     }
 
-    private var drumPad: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            label("Drum Hits")
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 5), spacing: 10) {
+    private var drumHitPad: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            sectionTitle("Drum Hits")
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 5), spacing: 12) {
                 ForEach(drumHits) { preset in
                     drumButton(preset)
                 }
@@ -226,62 +276,17 @@ struct ContentView: View {
         }
     }
 
-    private var statusCard: some View {
+    private var statusHint: some View {
         Group {
             if viewModel.showPreparationHint {
                 Text("Model files are missing. Run the weight preparation script first.")
                     .font(.caption.weight(.medium))
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(Color(red: 0.75, green: 0.34, blue: 0.08))
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 12))
+                    .background(Color(red: 1.0, green: 0.9, blue: 0.78), in: RoundedRectangle(cornerRadius: 14))
             }
         }
-    }
-
-    private var customPrompt: some View {
-        DisclosureGroup("Custom Prompt", isExpanded: $showsCustomPrompt) {
-            VStack(alignment: .leading, spacing: 12) {
-                TextField("Describe the audio you want", text: $viewModel.prompt, axis: .vertical)
-                    .lineLimit(3...4)
-                    .padding(12)
-                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
-
-                Picker("Length", selection: $viewModel.durationSeconds) {
-                    Text("1s").tag(Float(1))
-                    Text("2s").tag(Float(2))
-                    Text("5s").tag(Float(5))
-                    Text("10s").tag(Float(10))
-                    Text("15s").tag(Float(15))
-                }
-                .pickerStyle(.segmented)
-
-                Picker("Quality", selection: $viewModel.stepCount) {
-                    Text("Fast").tag(4)
-                    Text("Better").tag(8)
-                }
-                .pickerStyle(.segmented)
-
-                Button {
-                    viewModel.generate()
-                } label: {
-                    HStack {
-                        Spacer()
-                        Image(systemName: viewModel.isRunning ? "waveform" : "play.fill")
-                        Text(viewModel.generateButtonTitle)
-                            .font(.headline)
-                        Spacer()
-                    }
-                    .frame(height: 44)
-                }
-                .buttonStyle(.borderedProminent)
-                .disabled(!viewModel.canGenerate)
-            }
-            .padding(.top, 12)
-        }
-        .font(.subheadline.weight(.semibold))
-        .padding(14)
-        .background(Color.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 16))
     }
 
     private func musicCard(_ preset: PromptPreset) -> some View {
@@ -294,23 +299,17 @@ struct ContentView: View {
                     .foregroundStyle(preset.accent)
                 Spacer(minLength: 0)
                 Text(preset.title)
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color(red: 0.08, green: 0.09, blue: 0.11))
                     .lineLimit(1)
                 Text(preset.subtitle)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Color.black.opacity(0.45))
                     .lineLimit(2)
             }
-            .frame(width: 168, height: 116, alignment: .leading)
+            .frame(width: 148, height: 96, alignment: .leading)
             .padding(14)
-            .background(
-                LinearGradient(
-                    colors: [preset.accent.opacity(0.24), Color.white.opacity(0.07)],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ),
-                in: RoundedRectangle(cornerRadius: 18)
-            )
+            .background(preset.accent.opacity(0.13), in: RoundedRectangle(cornerRadius: 18))
             .overlay(
                 RoundedRectangle(cornerRadius: 18)
                     .stroke(preset.accent.opacity(0.28), lineWidth: 1)
@@ -326,37 +325,77 @@ struct ContentView: View {
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: preset.iconName)
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(preset.accent)
                 Text(preset.title)
-                    .font(.caption.weight(.semibold))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color(red: 0.08, green: 0.09, blue: 0.11))
                     .lineLimit(1)
             }
-            .frame(height: 62)
+            .frame(height: 56)
             .frame(maxWidth: .infinity)
-            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+            .background(.white.opacity(0.78), in: RoundedRectangle(cornerRadius: 16))
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(preset.accent.opacity(0.35), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(preset.accent.opacity(0.25), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
         .disabled(!viewModel.canGenerate)
     }
 
-    private func label(_ text: String) -> some View {
+    private func sectionTitle(_ text: String) -> some View {
         Text(text.uppercased())
             .font(.caption2.weight(.bold))
-            .foregroundStyle(.secondary)
-            .tracking(1.2)
+            .foregroundStyle(Color.black.opacity(0.42))
+            .tracking(1.4)
+    }
+
+    private func durationChip(_ seconds: Int) -> some View {
+        Button {
+            viewModel.durationSeconds = Float(seconds)
+        } label: {
+            Text("\(seconds)s")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(viewModel.durationSeconds == Float(seconds) ? .white : Color.black.opacity(0.55))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    viewModel.durationSeconds == Float(seconds)
+                        ? Color(red: 0.05, green: 0.68, blue: 0.48)
+                        : Color.white.opacity(0.72),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func qualityChip(_ title: String, steps: Int) -> some View {
+        Button {
+            viewModel.stepCount = steps
+        } label: {
+            Text(title)
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(viewModel.stepCount == steps ? .white : Color.black.opacity(0.55))
+                .padding(.horizontal, 8)
+                .padding(.vertical, 5)
+                .background(
+                    viewModel.stepCount == steps
+                        ? Color(red: 0.94, green: 0.58, blue: 0.12)
+                        : Color.white.opacity(0.72),
+                    in: Capsule()
+                )
+        }
+        .buttonStyle(.plain)
     }
 
     private func waveColor(_ index: Int) -> Color {
         let colors = [
-            Color(red: 0.26, green: 0.88, blue: 0.68),
-            Color(red: 0.42, green: 0.7, blue: 1.0),
-            Color(red: 1.0, green: 0.74, blue: 0.28),
-            Color(red: 1.0, green: 0.45, blue: 0.45),
+            Color(red: 0.05, green: 0.68, blue: 0.48),
+            Color(red: 0.24, green: 0.48, blue: 0.9),
+            Color(red: 0.94, green: 0.58, blue: 0.12),
+            Color(red: 0.92, green: 0.28, blue: 0.34),
+            Color(red: 0.62, green: 0.38, blue: 0.85),
         ]
         return colors[index % colors.count]
     }

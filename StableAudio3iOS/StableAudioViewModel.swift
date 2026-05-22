@@ -25,16 +25,12 @@ final class StableAudioViewModel: ObservableObject {
         !isRunning && allWeightsReady
     }
 
-    var generateButtonTitle: String {
-        isRunning ? "Generating..." : "Generate & Play"
-    }
-
     var heroStatus: String {
         if isRunning {
             return "Generating locally"
         }
         if allWeightsReady {
-            return "Pick an example or write your own prompt"
+            return "Tap a style or drum hit to generate"
         }
         return "Model files are not ready"
     }
