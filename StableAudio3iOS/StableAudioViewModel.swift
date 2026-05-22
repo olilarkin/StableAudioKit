@@ -29,6 +29,20 @@ final class StableAudioViewModel: ObservableObject {
         isRunning ? "Generating..." : "Generate & Play"
     }
 
+    var heroStatus: String {
+        if isRunning {
+            return "Generating locally. Keep the app open."
+        }
+        if allWeightsReady {
+            return "Ready. Pick an example or write your own prompt."
+        }
+        return "Model files are not ready yet."
+    }
+
+    var showPreparationHint: Bool {
+        !allWeightsReady && !weightStatuses.isEmpty
+    }
+
     var weightSummary: String {
         guard !weightStatuses.isEmpty else { return "Checking" }
         let readyCount = weightStatuses.filter(\.isReady).count
@@ -89,6 +103,13 @@ final class StableAudioViewModel: ObservableObject {
 
     func inspectWeights() {
         weightStatuses = inspector.inspect()
+    }
+
+    func applyPreset(_ preset: PromptPreset) {
+        prompt = preset.prompt
+        durationSeconds = preset.duration
+        stepCount = preset.steps
+        pipelineStatus = allWeightsReady ? "Ready" : "Missing weights"
     }
 
     func loadDecoderWeights() {
