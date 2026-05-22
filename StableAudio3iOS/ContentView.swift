@@ -5,31 +5,38 @@ struct ContentView: View {
 
     private let presets: [PromptPreset] = [
         PromptPreset(
-            title: "Drums",
-            subtitle: "dry kit",
-            prompt: "Tight acoustic drum kit groove, crisp snare, punchy kick, closed hi-hats, dry studio room, no melody",
+            title: "Kick",
+            subtitle: "short hit",
+            prompt: "Single punchy acoustic kick drum hit, dry studio sound, sharp transient, short decay, no rhythm, no melody",
             duration: 1,
             steps: 4
         ),
         PromptPreset(
-            title: "Breakbeat",
-            subtitle: "funk drums",
-            prompt: "Funky breakbeat drum loop, punchy acoustic kick, snappy snare, lively hi-hats, tight room sound, no melody",
-            duration: 2,
+            title: "Snare",
+            subtitle: "crisp hit",
+            prompt: "Single crisp snare drum hit, tight room sound, sharp attack, short decay, no rhythm, no melody",
+            duration: 1,
             steps: 4
         ),
         PromptPreset(
-            title: "808",
-            subtitle: "trap drums",
-            prompt: "Modern trap drum pattern, deep 808 kick, crisp snare, rapid hi-hat rolls, clean club mix, no melody",
-            duration: 2,
+            title: "Hi-Hat",
+            subtitle: "closed tick",
+            prompt: "Single closed hi-hat tick, bright metallic click, very short decay, no rhythm, no melody",
+            duration: 1,
             steps: 4
         ),
         PromptPreset(
-            title: "Rock Kit",
-            subtitle: "live room",
-            prompt: "Live rock drum kit, powerful kick, big snare, open hi-hats, tom fills, energetic room sound, no melody",
-            duration: 2,
+            title: "Tom",
+            subtitle: "low hit",
+            prompt: "Single low tom drum hit, resonant body, short room decay, no rhythm, no melody",
+            duration: 1,
+            steps: 4
+        ),
+        PromptPreset(
+            title: "Cymbal",
+            subtitle: "short crash",
+            prompt: "Single short crash cymbal hit, bright metallic shimmer, quick decay, no rhythm, no melody",
+            duration: 1,
             steps: 4
         ),
         PromptPreset(
@@ -201,7 +208,7 @@ struct PromptPreset: Identifiable {
 
     var iconName: String {
         switch title {
-        case "Drums", "Breakbeat", "808", "Rock Kit":
+        case "Kick", "Snare", "Hi-Hat", "Tom", "Cymbal":
             "drumsticks"
         case "Piano":
             "pianokeys"
