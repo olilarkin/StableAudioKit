@@ -1,0 +1,23 @@
+# Xcode
+DerivedData/
+build/
+*.xcuserstate
+xcuserdata/
+
+# SwiftPM / XcodeGen
+.build/
+.swiftpm/
+
+# Local model downloads and generated app weights
+Models/
+Resources/Weights/*.safetensors
+Resources/Weights/*.model
+Resources/Weights/manifest.json
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+.venv/

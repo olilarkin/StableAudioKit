@@ -1,0 +1,19 @@
+stableaudio3-ios
+
+This repository contains Swift and Python code for running converted Stable
+Audio 3 Small Music weights on iOS with MLX Swift.
+
+No Stability AI or Google model weights are included in this repository.
+
+When used with Stable Audio 3 weights, the model is licensed under the
+Stability AI Community License:
+
+This Stability AI Model is licensed under the Stability AI Community License,
+Copyright (c) Stability AI Ltd. All Rights Reserved.
+
+Stable Audio 3 uses T5Gemma for text conditioning. Gemma is provided under and
+subject to the Gemma Terms of Use found at ai.google.dev/gemma/terms.
+
+Users are responsible for accepting and complying with the upstream model
+licenses and use policies before downloading, converting, distributing, or using
+model weights.
