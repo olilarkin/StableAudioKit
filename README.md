@@ -1,5 +1,7 @@
 # stableaudio3-ios
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 Stable Audio 3 Small Music on iOS with MLX Swift.
 
 This repository contains an iOS demo/runtime, weight conversion script, and
