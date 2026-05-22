@@ -2,62 +2,54 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Stable Audio 3 Small Music on iOS with MLX Swift.
+Run Stable Audio 3 Small Music locally on iPhone with MLX Swift.
 
-This repository contains an iOS demo/runtime, weight conversion script, and
-Swift MLX ports for the small-music text-to-audio path:
+This project is an iOS app and runtime for text-to-audio generation on Apple
+devices. It converts the official Stable Audio 3 optimized MLX checkpoints into
+app-bundled safetensors, loads them with MLX Swift, generates audio on device,
+writes a WAV file, and plays it back in the app.
 
-```text
-prompt -> T5Gemma -> conditioning -> DiT sampler -> SAME-S decoder -> WAV playback
+## What It Can Do
+
+- Generate stereo audio from a text prompt directly on iPhone
+- Run the Stable Audio 3 `small-music` path with the `same-s` decoder
+- Test short creative loops such as drum grooves, texture beds, riffs, and music cues
+- Choose short duration presets for latency testing: 1s, 2s, 5s, 10s, 15s
+- Choose 4 or 8 sampling steps
+- Keep the pipeline warm after the first run, so later generations reuse loaded weights
+- Print per-stage timing logs in Xcode for T5, DiT sampling, decoder, and WAV writing
+
+Current scope:
+
+- Text-to-audio only
+- Stable Audio 3 Small Music only
+- iOS 17+ device target
+- Local on-device inference, no server required
+
+## Quick Start
+
+```bash
+git clone https://github.com/kellyvv/StableAudio3-IOS.git
+cd StableAudio3-IOS
 ```
 
-The default latency-test preset is 1 second, 4 sampling steps. The first
-generation loads weights into a long-lived pipeline actor; later generations
-reuse tokenizer, T5Gemma, conditioner, DiT, and decoder weights and print stage
-timing to the Xcode console.
+Install the small local tools:
 
-## What Is Included
-
-- SwiftUI iOS app target
-- MLX Swift implementation for T5Gemma, SA3 conditioning, DiT small-music,
-  SAME-S decoder, sampler, WAV writer, and playback
-- Python conversion script from official MLX NPZ checkpoints to app-bundled
-  safetensors resources
-- XcodeGen project spec
-
-## What Is Not Included
-
-Model weights are not included in this repository.
-
-Generated files such as these are git-ignored:
-
-```text
-Resources/Weights/t5gemma_f16.safetensors
-Resources/Weights/dit_sm-music_f16.safetensors
-Resources/Weights/same_s_decoder_f32.safetensors
-Resources/Weights/t5gemma_tokenizer.model
-Resources/Weights/sa3_conditioner.safetensors
-Resources/Weights/manifest.json
+```bash
+brew install xcodegen
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -U mlx numpy huggingface_hub
 ```
 
-Download and use model weights only after accepting the upstream Stability AI
-and Gemma terms.
+Log in to Hugging Face with an account that has accepted the upstream Stable
+Audio 3 and Gemma terms:
 
-## Requirements
+```bash
+hf auth login
+```
 
-- macOS with Xcode 16+
-- iOS 17+ device with Apple GPU
-- XcodeGen
-- Python environment with `mlx` and `numpy`
-- Hugging Face access to `stabilityai/stable-audio-3-optimized`
-
-## Prepare Weights
-
-Install the Hugging Face CLI and log in with an account that has accepted the
-upstream model terms.
-
-Download the official optimized MLX checkpoints into the local ignored
-`Models/` directory:
+Download the official optimized MLX checkpoints:
 
 ```bash
 hf download stabilityai/stable-audio-3-optimized \
@@ -67,23 +59,26 @@ hf download stabilityai/stable-audio-3-optimized \
   --local-dir Models/stable-audio-3-optimized
 ```
 
-Convert the checkpoints for the iOS app:
+Convert the weights for the iOS app:
 
 ```bash
 python3 Scripts/prepare_weights.py
 ```
 
-The script writes the generated resources under `Resources/Weights/`.
-
-## Build
-
-Generate the Xcode project:
+Generate and open the Xcode project:
 
 ```bash
 xcodegen generate
+open StableAudio3iOS.xcodeproj
 ```
 
-Build from the command line:
+In Xcode, select your development team, choose a real iPhone target, then run
+the `StableAudio3iOS` scheme. The app will show the staged weights and a
+`Generate & Play` button.
+
+## Command-Line Build Check
+
+You can verify the project without signing:
 
 ```bash
 xcodebuild -quiet \
@@ -94,13 +89,24 @@ xcodebuild -quiet \
   build
 ```
 
-For a real device install, open `StableAudio3iOS.xcodeproj`, select your
-development team, and run the `StableAudio3iOS` scheme on an iPhone.
+## Weight Files
+
+This repository does not include model weights. After conversion, the app uses:
+
+```text
+Resources/Weights/t5gemma_f16.safetensors
+Resources/Weights/dit_sm-music_f16.safetensors
+Resources/Weights/same_s_decoder_f32.safetensors
+Resources/Weights/t5gemma_tokenizer.model
+Resources/Weights/sa3_conditioner.safetensors
+Resources/Weights/manifest.json
+```
+
+These generated files are ignored by git.
 
 ## Timing Logs
 
-Run the app from Xcode and tap `Generate & Play`. The console prints cold and
-warm timing:
+Run from Xcode and tap `Generate & Play`. The first run includes model loading:
 
 ```text
 [SA3] cache miss DiT, loading weights
@@ -108,13 +114,41 @@ warm timing:
 [SA3] total 1800ms prompt="..." seconds=1.0 steps=4 latentLength=...
 ```
 
-Run a second or third generation to measure warm pipeline latency. Warm runs
-should show cache hits for tokenizer, T5Gemma, conditioner, DiT, and decoder.
+Run again to measure warm latency. Warm runs should show cache hits:
+
+```text
+[SA3] cache hit tokenizer
+[SA3] cache hit T5Gemma
+[SA3] cache hit DiT
+[SA3] cache hit decoder
+```
+
+For backend-style experiments, use 1s / 4 steps first, then increase duration or
+steps if the quality/latency tradeoff is acceptable.
+
+## Project Layout
+
+```text
+StableAudio3iOS/          SwiftUI app and MLX Swift runtime
+Scripts/prepare_weights.py  NPZ -> safetensors conversion
+Resources/Weights/        Local generated weights, ignored by git
+project.yml               XcodeGen project spec
+```
+
+## Notes
+
+- Use a real iPhone. Simulator does not represent the target MLX/Metal path.
+- The first generation is a cold run. Use the second or third run for latency numbers.
+- The app bundle is large when weights are staged locally, roughly 1.6 GB before app overhead.
+- This is a practical prototype runtime, not a full Stable Audio 3 product surface.
 
 ## License
 
-Repository code is licensed under MIT. Model weights are not included and are
-not covered by this repository license.
+Repository code is licensed under MIT.
 
-See `NOTICE` and `THIRD_PARTY_LICENSES.md` before downloading, converting, or
+Model weights are not included and are not covered by this repository license.
+Stable Audio 3 weights are subject to the Stability AI Community License.
+T5Gemma components are subject to the Gemma Terms of Use.
+
+Read `NOTICE` and `THIRD_PARTY_LICENSES.md` before downloading, converting, or
 distributing any model weights.
