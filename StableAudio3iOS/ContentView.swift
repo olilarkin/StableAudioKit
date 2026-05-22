@@ -48,11 +48,10 @@ struct ContentView: View {
         ),
     ]
 
-    private let sfxPrompts: [PromptPreset] = [
+    private let drumPrompts: [PromptPreset] = [
         PromptPreset(
             title: "Kick",
             subtitle: "punch",
-            model: .smallSFX,
             prompt: "Single punchy acoustic kick drum hit, dry studio sound, sharp transient, short decay, no rhythm, no melody",
             duration: 1,
             steps: 2,
@@ -62,7 +61,6 @@ struct ContentView: View {
         PromptPreset(
             title: "Snare",
             subtitle: "crisp",
-            model: .smallSFX,
             prompt: "Single crisp snare drum hit, tight room sound, sharp attack, short decay, no rhythm, no melody",
             duration: 1,
             steps: 2,
@@ -70,33 +68,30 @@ struct ContentView: View {
             accent: Color(red: 0.92, green: 0.28, blue: 0.34)
         ),
         PromptPreset(
-            title: "Whoosh",
-            subtitle: "quick",
-            model: .smallSFX,
-            prompt: "Short cinematic whoosh pass by, clean air movement, quick rise and decay, no music, no voice",
+            title: "Hi-Hat",
+            subtitle: "tick",
+            prompt: "Single closed hi-hat tick, bright metallic click, very short decay, no rhythm, no melody",
             duration: 1,
-            steps: 4,
-            iconName: "wind",
+            steps: 2,
+            iconName: "sparkle",
             accent: Color(red: 0.88, green: 0.68, blue: 0.05)
         ),
         PromptPreset(
-            title: "Footstep",
-            subtitle: "wood",
-            model: .smallSFX,
-            prompt: "Single sneaker footstep on wooden floor, close microphone, short natural room tail, no music, no voice",
+            title: "Tom",
+            subtitle: "low",
+            prompt: "Single low tom drum hit, resonant body, short room decay, no rhythm, no melody",
             duration: 1,
-            steps: 4,
-            iconName: "figure.walk",
+            steps: 2,
+            iconName: "circle.dashed",
             accent: Color(red: 0.16, green: 0.48, blue: 0.8)
         ),
         PromptPreset(
-            title: "Glass",
-            subtitle: "break",
-            model: .smallSFX,
-            prompt: "Small glass bottle breaking on concrete, sharp impact, scattered tiny shards, dry room, no music, no voice",
+            title: "Cymbal",
+            subtitle: "crash",
+            prompt: "Single short crash cymbal hit, bright metallic shimmer, quick decay, no rhythm, no melody",
             duration: 1,
-            steps: 4,
-            iconName: "sparkles",
+            steps: 2,
+            iconName: "rays",
             accent: Color(red: 0.95, green: 0.48, blue: 0.12)
         ),
     ]
@@ -111,7 +106,7 @@ struct ContentView: View {
                     playerPanel
                     promptComposer
                     musicPromptRow
-                    sfxPromptPad
+                    drumPromptPad
                     statusHint
                 }
                 .padding(.horizontal, 22)
@@ -284,12 +279,12 @@ struct ContentView: View {
         }
     }
 
-    private var sfxPromptPad: some View {
+    private var drumPromptPad: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("Sound Effects")
+            sectionTitle("Drum Hits")
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 5), spacing: 12) {
-                ForEach(sfxPrompts) { preset in
-                    sfxButton(preset)
+                ForEach(drumPrompts) { preset in
+                    drumButton(preset)
                 }
             }
         }
@@ -338,7 +333,7 @@ struct ContentView: View {
         .disabled(!viewModel.canGenerate)
     }
 
-    private func sfxButton(_ preset: PromptPreset) -> some View {
+    private func drumButton(_ preset: PromptPreset) -> some View {
         Button {
             viewModel.generatePreset(preset)
         } label: {
@@ -459,7 +454,7 @@ struct PromptPreset: Identifiable {
     var id: String { title }
     let title: String
     let subtitle: String
-    let model: StableAudioModelKind
+    var model: StableAudioModelKind? = nil
     let prompt: String
     let duration: Float
     let steps: Int

@@ -113,7 +113,9 @@ final class StableAudioViewModel: ObservableObject {
     }
 
     func applyPreset(_ preset: PromptPreset) {
-        selectedModel = preset.model
+        if let model = preset.model {
+            selectedModel = model
+        }
         prompt = preset.prompt
         durationSeconds = preset.duration
         stepCount = preset.steps
