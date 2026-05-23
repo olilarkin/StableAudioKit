@@ -8,6 +8,10 @@
 
 当前 app 跑通的是 `small-music` 和 `small-sfx`。下一个适合移动端的目标是 `medium`。最大的模型不是这个项目的目标。
 
+## 演示
+
+https://github.com/user-attachments/assets/5435773b-fb4b-492e-ac8e-33a8d211979b
+
 ## 这个项目解决什么
 
 Stable Audio 3 官方已经有 Mac 上的 MLX 路径。这个项目把这条路径搬到 iPhone 上：

@@ -11,6 +11,10 @@ stereo WAV on the phone. No cloud server is needed.
 The current app runs `small-music` and `small-sfx`. The next practical target is
 `medium`. The largest models are not the target here.
 
+## Demo
+
+https://github.com/user-attachments/assets/5435773b-fb4b-492e-ac8e-33a8d211979b
+
 ## Why This Exists
 
 Stable Audio 3 already has an official MLX path on Mac. This project shows how
