@@ -1,41 +1,27 @@
 # stableaudio3-ios
 
+On-device Stable Audio 3 generation for iPhone, powered by MLX Swift.
+
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-Generate music and sound effects on iPhone with Stable Audio 3.
+<p align="center">
+  <video src="https://github.com/user-attachments/assets/5435773b-fb4b-492e-ac8e-33a8d211979b" controls width="320"></video>
+</p>
 
-This is an iOS app and runtime for running Stable Audio 3 locally with MLX
-Swift. You type a prompt, tap play, and the app generates a short
-stereo WAV on the phone. No cloud server is needed.
+## What It Does
 
-The current app runs `small-music` and `small-sfx`. The next practical target is
-`medium`. The largest models are not the target here.
+This repo contains an iOS app and runtime for running Stable Audio 3 locally on
+iPhone. Type a prompt, choose `Music` or `SFX`, tap play, and the phone generates
+a stereo WAV locally.
 
-## Demo
+- No server
+- No streaming backend
+- Music loops, drum one-shots, and sound effects
+- `small-music` and `small-sfx` supported now
+- `medium` is the next practical target
 
-https://github.com/user-attachments/assets/5435773b-fb4b-492e-ac8e-33a8d211979b
-
-## Why This Exists
-
-Stable Audio 3 already has an official MLX path on Mac. This project shows how
-to move that path onto iPhone:
-
-- convert the official MLX weights into iOS-friendly files
-- load the model in an iOS app
-- generate audio fully on device
-- keep the model warm so repeated generations are faster
-- log generation time for real device testing
-
-## What You Can Try
-
-- drum grooves
-- short music loops
-- sound effects
-- ambient textures
-- one-shot audio ideas
-
-Start with `1s` and `4 steps` to test latency. Use longer durations or more
-steps when quality matters more than speed.
+The app uses a shared T5Gemma text encoder and SAME-S decoder. Switching between
+`Music` and `SFX` switches the DiT model.
 
 ## Quick Start
 
@@ -46,7 +32,7 @@ git clone https://github.com/kellyvv/StableAudio3-IOS.git
 cd StableAudio3-IOS
 ```
 
-Install tools:
+Install local tools:
 
 ```bash
 brew install xcodegen
@@ -81,19 +67,35 @@ Convert them for the iOS app:
 python3 Scripts/prepare_weights.py
 ```
 
-Open the app:
+Generate the Xcode project and run on a real iPhone:
 
 ```bash
 xcodegen generate
 open StableAudio3iOS.xcodeproj
 ```
 
-In Xcode, choose your development team, select a real iPhone, and run. When the
-app opens, choose Music or SFX, then tap play.
+In Xcode, select your development team and run the app on device.
 
-## What Gets Generated Locally
+## App Modes
 
-The conversion script creates these files under `Resources/Weights/`:
+| Mode | Model | Best For |
+| --- | --- | --- |
+| Music | `dit_sm-music_f16` | loops, grooves, tonal ideas |
+| SFX | `dit_sm-sfx_f16` | sound effects, drum hits, short Foley |
+
+Quality options use the same sampler:
+
+| Option | Steps | Use |
+| --- | ---: | --- |
+| Fast | 4 | quick tests |
+| Better | 8 | default quality |
+| Best | 16 | slower, cleaner generations |
+
+Drum hit presets use 2 steps so you can test very low latency one-shots.
+
+## Local Weight Files
+
+`Scripts/prepare_weights.py` creates these files under `Resources/Weights/`:
 
 ```text
 t5gemma_f16.safetensors
@@ -108,13 +110,13 @@ manifest.json
 
 They are ignored by git. This repo does not ship model weights.
 
-## Timing
+## Timing Logs
 
-The first generation loads the model, so it is slower. Run again to measure the
-warm speed. Xcode logs look like this:
+The first generation loads weights, so it is slower. Run again to measure warm
+speed. Xcode logs look like this:
 
 ```text
-[SA3] cache hit DiT
+[SA3] cache hit DiT Small SFX
 [SA3] step 1/4 320ms total=...
 [SA3] total 1800ms model=Small SFX prompt="..." seconds=1.0 steps=4 latentLength=...
 ```
@@ -134,10 +136,9 @@ xcodebuild -quiet \
 
 ## Notes
 
-- Use a real iPhone. The simulator is not useful for this.
-- The current working models are `small-music` and `small-sfx`.
-- `medium` is the next target.
-- The app becomes large when local weights are added, roughly 2.5 GB for both small models.
+- Use a real iPhone. The simulator is not useful for this runtime.
+- Bundling both small models makes the app large, roughly 2.5 GB of local model files.
+- The largest Stable Audio 3 models are not the target of this project.
 
 ## License
 
@@ -145,5 +146,5 @@ The code in this repo is MIT licensed.
 
 Model weights are not included. Stable Audio 3 weights use the Stability AI
 Community License. T5Gemma uses the Gemma Terms of Use. Read `NOTICE` and
-`THIRD_PARTY_LICENSES.md` before downloading, converting, or distributing
+`THIRD_PARTY_LICENSES.md` before downloading, converting, distributing, or using
 weights.
