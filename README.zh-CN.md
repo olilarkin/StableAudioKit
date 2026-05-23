@@ -4,9 +4,13 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md)
 
-<p align="center">
-  <video src="https://github.com/user-attachments/assets/5435773b-fb4b-492e-ac8e-33a8d211979b" controls width="320"></video>
-</p>
+<table align="center">
+  <tr>
+    <td align="center">
+      <video src="https://github.com/user-attachments/assets/5435773b-fb4b-492e-ac8e-33a8d211979b" controls width="360"></video>
+    </td>
+  </tr>
+</table>
 
 ## 这是做什么的
 
