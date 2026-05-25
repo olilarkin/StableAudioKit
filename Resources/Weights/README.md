@@ -2,7 +2,7 @@
 
 This directory is intentionally committed without model weights.
 
-The iOS app expects the official `stable-audio-3-optimized` small-music and
+The CLI app expects the official `stable-audio-3-optimized` small-music and
 small-sfx MLX weights converted from NPZ to safetensors:
 
 - `t5gemma_f16.safetensors`

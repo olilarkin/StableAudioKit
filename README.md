@@ -1,154 +1,141 @@
-# stableaudio3-ios
+# StableAudioKit
 
-On-device Stable Audio 3 generation for iPhone, powered by MLX Swift.
+Swift package and CLI/demo app for running Stable Audio 3 MLX inference on Apple Silicon without a Python runtime dependency.
 
-[English](README.md) | [简体中文](README.zh-CN.md)
+This repo currently packages the Stable Audio 3 small music and small SFX text-to-audio path:
 
-<table align="center">
-  <tr>
-    <td align="center">
-      <video src="https://github.com/user-attachments/assets/5435773b-fb4b-492e-ac8e-33a8d211979b" controls width="360"></video>
-    </td>
-  </tr>
-</table>
+- T5Gemma prompt encoding
+- Stable Audio 3 conditioning
+- DiT sampling for `smallMusic` and `smallSFX`
+- same-s decoder
+- WAV writing for CLI/demo output
 
-## What It Does
+The package is structured so audio-to-audio, in-painting, masks, and future Stable Audio Open 3 features can be added without changing the public loading model: apps create a `StableAudioPipeline` from a prepared model directory, then pass typed generation requests.
 
-This repo contains an iOS app and runtime for running Stable Audio 3 locally on
-iPhone. Type a prompt, choose `Music` or `SFX`, tap play, and the phone generates
-a stereo WAV locally.
+## Requirements
 
-- No server
-- No streaming backend
-- Music loops, drum one-shots, and sound effects
-- `small-music` and `small-sfx` supported now
-- `medium` is the next practical target
+- macOS 14+ on Apple Silicon for the CLI/demo
+- Xcode with SwiftPM
+- Prepared Stable Audio 3 MLX weights in safetensors format
+- For weight download: access granted to the gated Stability AI model on Hugging Face
 
-The app uses a shared T5Gemma text encoder and SAME-S decoder. Switching between
-`Music` and `SFX` switches the DiT model.
+The Swift library does not depend on Python at runtime. `Scripts/prepare_weights.py` is a developer preparation tool used to download and convert official NPZ weights into local safetensors files.
+Python 3.10 or newer is fine for preparation; use a virtual environment so the `hf` CLI and its dependencies are installed consistently.
 
-## Quick Start
+### MLX Metal library
 
-Clone the repo:
+`swift build` does not compile `.metal` shader files, so the MLX Metal library must be built once as a separate step before the CLI will run. `Scripts/compile-mlx-metallib.sh` handles this — see the CLI setup instructions below.
+
+## Package Layout
+
+- `Sources/StableAudioKit` - reusable Swift library
+- `Sources/StableAudioCLI` - command line generator
+- `Example/SA3CLI` - tiny package using the library as a dependency
+- `Scripts/prepare_weights.py` - authorized download and conversion helper
+- `Scripts/compile-mlx-metallib.sh` - compiles MLX Metal shaders for SwiftPM CLI builds
+
+## Model Authorization and Preparation
+
+Stable Audio 3 weights are gated. Before downloading, accept the upstream model terms on Hugging Face for the Stability AI repo, then authenticate locally.
+
+Recommended:
 
 ```bash
-git clone https://github.com/kellyvv/StableAudio3-IOS.git
-cd StableAudio3-IOS
-```
-
-Install local tools:
-
-```bash
-brew install xcodegen
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -U mlx numpy huggingface_hub
-```
-
-Log in to Hugging Face:
-
-```bash
+python -m pip install -U pip
+python -m pip install -r requirements.txt
 hf auth login
 ```
 
-You need access to the Stable Audio 3 weights on Hugging Face and must accept
-the upstream Stability AI and Gemma terms first.
+Alternatively, set `HF_TOKEN` to a token that has access to the gated repo.
 
-Download the official MLX weights:
-
-```bash
-hf download stabilityai/stable-audio-3-optimized \
-  --include "MLX/t5gemma_f16.npz" \
-  --include "MLX/dit_sm-music_f16.npz" \
-  --include "MLX/dit_sm-sfx_f16.npz" \
-  --include "MLX/same_s_decoder_f32.npz" \
-  --local-dir Models/stable-audio-3-optimized
-```
-
-Convert them for the iOS app:
+Download and convert:
 
 ```bash
-python3 Scripts/prepare_weights.py
+python Scripts/prepare_weights.py --download
 ```
 
-Generate the Xcode project and run on a real iPhone:
+If you already have the official optimized MLX NPZ files locally:
 
 ```bash
-xcodegen generate
-open StableAudio3iOS.xcodeproj
+python Scripts/prepare_weights.py \
+  --source Models/stable-audio-3-optimized/MLX \
+  --destination Resources/Weights
 ```
 
-In Xcode, select your development team and run the app on device.
+Generated model files are ignored by git. The expected prepared files are:
 
-## App Modes
+- `t5gemma_f16.safetensors`
+- `dit_sm-music_f16.safetensors`
+- `dit_sm-sfx_f16.safetensors`
+- `same_s_decoder_f32.safetensors`
+- `t5gemma_tokenizer.model`
+- `sa3_conditioner_sm-music.safetensors`
+- `sa3_conditioner_sm-sfx.safetensors`
+- `manifest.json`
 
-| Mode | Model | Best For |
-| --- | --- | --- |
-| Music | `dit_sm-music_f16` | loops, grooves, tonal ideas |
-| SFX | `dit_sm-sfx_f16` | sound effects, drum hits, short Foley |
+## CLI Usage
 
-Quality options use the same sampler:
+### First-time setup
 
-| Option | Steps | Use |
-| --- | ---: | --- |
-| Fast | 4 | quick tests |
-| Better | 8 | default quality |
-| Best | 16 | slower, cleaner generations |
-
-Drum hit presets use 2 steps so you can test very low latency one-shots.
-
-## Local Weight Files
-
-`Scripts/prepare_weights.py` creates these files under `Resources/Weights/`:
-
-```text
-t5gemma_f16.safetensors
-dit_sm-music_f16.safetensors
-dit_sm-sfx_f16.safetensors
-same_s_decoder_f32.safetensors
-t5gemma_tokenizer.model
-sa3_conditioner_sm-music.safetensors
-sa3_conditioner_sm-sfx.safetensors
-manifest.json
-```
-
-They are ignored by git. This repo does not ship model weights.
-
-## Timing Logs
-
-The first generation loads weights, so it is slower. Run again to measure warm
-speed. Xcode logs look like this:
-
-```text
-[SA3] cache hit DiT Small SFX
-[SA3] step 1/4 320ms total=...
-[SA3] total 1800ms model=Small SFX prompt="..." seconds=1.0 steps=4 latentLength=...
-```
-
-## Build Check
-
-You can check the project without signing:
+Build the CLI binary, then compile the MLX Metal shaders. The compiled
+`mlx.metallib` is placed next to the binary and found automatically at runtime.
 
 ```bash
-xcodebuild -quiet \
-  -project StableAudio3iOS.xcodeproj \
-  -scheme StableAudio3iOS \
-  -destination 'generic/platform=iOS' \
-  CODE_SIGNING_ALLOWED=NO \
-  build
+swift build --product StableAudioCLI
+./Scripts/compile-mlx-metallib.sh
 ```
 
-## Notes
+Re-run `compile-mlx-metallib.sh` whenever the mlx-swift dependency is updated.
+The metallib is not model-specific — it contains MLX's core GPU kernels and
+is reusable across any project on the same mlx-swift version.
 
-- Use a real iPhone. The simulator is not useful for this runtime.
-- Bundling both small models makes the app large, roughly 2.5 GB of local model files.
-- The largest Stable Audio 3 models are not the target of this project.
+### Generating audio
 
-## License
+```bash
+swift run StableAudioCLI \
+  --model smallMusic \
+  --prompt "lofi house loop, 120 BPM" \
+  --duration 10 \
+  --steps 8 \
+  --seed 42 \
+  --model-path Resources/Weights \
+  -o output.wav
+```
 
-The code in this repo is MIT licensed.
+For sound effects:
 
-Model weights are not included. Stable Audio 3 weights use the Stability AI
-Community License. T5Gemma uses the Gemma Terms of Use. Read `NOTICE` and
-`THIRD_PARTY_LICENSES.md` before downloading, converting, distributing, or using
-weights.
+```bash
+swift run StableAudioCLI \
+  --model smallSFX \
+  --prompt "single crisp snare drum hit, dry studio room" \
+  --duration 1 \
+  --steps 4 \
+  -o snare.wav
+```
+
+## Swift API
+
+```swift
+import StableAudioKit
+
+let pipeline = try StableAudioPipeline.load(from: modelDirectoryURL)
+let request = StableAudioGenerationRequest(
+    model: .smallMusic,
+    prompt: "warm arpeggios over a house beat, 124 BPM",
+    seconds: 10,
+    steps: 8,
+    seed: 42
+)
+
+let result = try await pipeline.generate(request) { progress in
+    print(progress)
+}
+
+try AudioWriter.write(result, to: outputURL)
+```
+
+## Current Scope
+
+The package API intentionally separates model loading, request configuration, sampling, and audio writing. The current inference implementation is text-to-audio only. Audio-to-audio, in-painting, negative conditioning, and mask-conditioned generation should be added as new request modes backed by additional encoder/conditioning components, not by changing where apps store or authorize model files.

@@ -3,7 +3,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
+import shutil
+import subprocess
 
 import mlx.core as mx
 import numpy as np
@@ -46,6 +49,45 @@ CONDITIONER_FILES = [
         "fileName": "sa3_conditioner_sm-sfx.safetensors",
     },
 ]
+
+
+def ensure_huggingface_auth() -> None:
+    if os.environ.get("HF_TOKEN"):
+        return
+    hf = shutil.which("hf")
+    if not hf:
+        raise RuntimeError(
+            "Gated model download requires authorization. Install the Hugging Face CLI "
+            "(`hf`) and run `hf auth login`, or set HF_TOKEN to a token that has access "
+            "to the Stability AI gated model."
+        )
+    result = subprocess.run([hf, "auth", "whoami"], capture_output=True, text=True)
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Gated model download requires authorization. Run `hf auth login` after "
+            "accepting the model terms on Hugging Face, or set HF_TOKEN to an authorized token."
+        )
+
+
+def download_weights(repo_id: str, target: Path, revision: str | None) -> None:
+    ensure_huggingface_auth()
+    hf = shutil.which("hf")
+    if not hf:
+        raise RuntimeError("Hugging Face CLI `hf` is required for downloads.")
+
+    command = [
+        hf,
+        "download",
+        repo_id,
+        "--include",
+        "MLX/*",
+        "--local-dir",
+        str(target),
+    ]
+    if revision:
+        command.extend(["--revision", revision])
+    print("downloading gated weights with Hugging Face authorization")
+    subprocess.run(command, check=True)
 
 
 def convert_file(source: Path, target: Path) -> int:
@@ -102,11 +144,31 @@ def main() -> None:
         action="store_true",
         help="Do not rewrite safetensors files that already exist.",
     )
+    parser.add_argument(
+        "--download",
+        action="store_true",
+        help="Download gated weights with `hf download` before conversion.",
+    )
+    parser.add_argument(
+        "--repo-id",
+        default="stabilityai/stable-audio-3-optimized",
+        help="Hugging Face repo id containing the official MLX weights.",
+    )
+    parser.add_argument(
+        "--revision",
+        default=None,
+        help="Optional Hugging Face revision, tag, or commit to download.",
+    )
     args = parser.parse_args()
 
     source_dir = args.source.resolve()
     destination_dir = args.destination.resolve()
     destination_dir.mkdir(parents=True, exist_ok=True)
+
+    if args.download:
+        download_target = source_dir.parent
+        download_target.mkdir(parents=True, exist_ok=True)
+        download_weights(args.repo_id, download_target, args.revision)
 
     manifest_files = []
     for item in FILES:

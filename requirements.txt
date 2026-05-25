@@ -1,0 +1,4 @@
+mlx
+numpy
+huggingface_hub[cli]>=1.10,<2
+typer>=0.16,<1

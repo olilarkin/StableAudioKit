@@ -1,5 +1,4 @@
 {
-  "originHash" : "2f094895dbe81d66b4f3635a5037c9ae33fe3d6ceed2cb04c02b40ccb6d53f83",
   "pins" : [
     {
       "identity" : "mlx-swift",
@@ -14,8 +13,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-argument-parser.git",
       "state" : {
-        "revision" : "626b5b7b2f45e1b0b1c6f4a309296d1d21d7311b",
-        "version" : "1.7.1"
+        "revision" : "5e0406d68a4937f21ae5f670b8f89dad1d156a1c",
+        "version" : "1.8.0"
       }
     },
     {
@@ -36,5 +35,5 @@
       }
     }
   ],
-  "version" : 3
+  "version" : 2
 }
