@@ -12,12 +12,15 @@ import mlx.core as mx
 import numpy as np
 
 
-FILES = [
+COMMON_FILES = [
     {
         "role": "T5Gemma text encoder",
         "sourceFileName": "t5gemma_f16.npz",
         "fileName": "t5gemma_f16.safetensors",
     },
+]
+
+SMALL_FILES = [
     {
         "role": "DiT small-music",
         "sourceFileName": "dit_sm-music_f16.npz",
@@ -35,9 +38,23 @@ FILES = [
     },
 ]
 
+MEDIUM_FILES = [
+    {
+        "role": "DiT medium",
+        "sourceFileName": "dit_medium_f16.npz",
+        "fileName": "dit_medium_f16.safetensors",
+    },
+    {
+        "role": "same-l decoder",
+        "sourceFileName": "same_l_decoder_f32.npz",
+        "fileName": "same_l_decoder_f32.safetensors",
+    },
+]
+
 TOKENIZER_FILE = "t5gemma_tokenizer.model"
 LEGACY_CONDITIONER_FILE = "sa3_conditioner.safetensors"
-CONDITIONER_FILES = [
+
+SMALL_CONDITIONER_FILES = [
     {
         "role": "Conditioner small-music",
         "sourceFileName": "dit_sm-music_f16.npz",
@@ -47,6 +64,14 @@ CONDITIONER_FILES = [
         "role": "Conditioner small-sfx",
         "sourceFileName": "dit_sm-sfx_f16.npz",
         "fileName": "sa3_conditioner_sm-sfx.safetensors",
+    },
+]
+
+MEDIUM_CONDITIONER_FILES = [
+    {
+        "role": "Conditioner medium",
+        "sourceFileName": "dit_medium_f16.npz",
+        "fileName": "sa3_conditioner_medium.safetensors",
     },
 ]
 
@@ -93,6 +118,12 @@ def download_weights(repo_id: str, target: Path, revision: str | None) -> None:
 def convert_file(source: Path, target: Path) -> int:
     print(f"loading {source}")
     arrays = dict(mx.load(str(source)))
+    # SAME-L stores mapping.weight as PyTorch Conv1d [out, in, 1]; flatten to
+    # nn.Linear [out, in] so the Swift loader can use it as a regular matmul.
+    if "mapping.weight" in arrays:
+        w = arrays["mapping.weight"]
+        if w.ndim == 3 and w.shape[-1] == 1:
+            arrays["mapping.weight"] = w.reshape(w.shape[0], w.shape[1])
     print(f"saving {target} ({len(arrays)} tensors)")
     mx.save_safetensors(str(target), arrays)
     return target.stat().st_size
@@ -159,7 +190,16 @@ def main() -> None:
         default=None,
         help="Optional Hugging Face revision, tag, or commit to download.",
     )
+    parser.add_argument(
+        "--variants",
+        nargs="+",
+        choices=["small", "medium"],
+        default=["small"],
+        help="Model size(s) to prepare. Defaults to the small variants.",
+    )
     args = parser.parse_args()
+
+    variants = set(args.variants)
 
     source_dir = args.source.resolve()
     destination_dir = args.destination.resolve()
@@ -170,8 +210,17 @@ def main() -> None:
         download_target.mkdir(parents=True, exist_ok=True)
         download_weights(args.repo_id, download_target, args.revision)
 
+    files_to_convert = list(COMMON_FILES)
+    conditioner_sources = []
+    if "small" in variants:
+        files_to_convert.extend(SMALL_FILES)
+        conditioner_sources.extend(SMALL_CONDITIONER_FILES)
+    if "medium" in variants:
+        files_to_convert.extend(MEDIUM_FILES)
+        conditioner_sources.extend(MEDIUM_CONDITIONER_FILES)
+
     manifest_files = []
-    for item in FILES:
+    for item in files_to_convert:
         source = source_dir / item["sourceFileName"]
         target = destination_dir / item["fileName"]
         if not source.exists():
@@ -207,7 +256,7 @@ def main() -> None:
     )
 
     conditioner_manifest = []
-    for item in CONDITIONER_FILES:
+    for item in conditioner_sources:
         conditioner_source = source_dir / item["sourceFileName"]
         conditioner_target = destination_dir / item["fileName"]
         if not conditioner_source.exists():
@@ -232,8 +281,13 @@ def main() -> None:
             if not (args.skip_existing and can_skip(legacy_target)):
                 legacy_target.write_bytes(conditioner_target.read_bytes())
 
+    model_segments = []
+    if "small" in variants:
+        model_segments.append("stable-audio-3-small-music+stable-audio-3-small-sfx")
+    if "medium" in variants:
+        model_segments.append("stable-audio-3-medium")
     manifest = {
-        "model": "stabilityai/stable-audio-3-small-music+stable-audio-3-small-sfx",
+        "model": "stabilityai/" + "+".join(model_segments) if model_segments else "stabilityai/none",
         "format": "safetensors",
         "tokenizer": {
             "fileName": TOKENIZER_FILE,

@@ -14,7 +14,10 @@ typedef struct StableAudioPipeline StableAudioPipeline;
 
 typedef enum StableAudioModel {
     STABLE_AUDIO_MODEL_SMALL_MUSIC = 0,
-    STABLE_AUDIO_MODEL_SMALL_SFX = 1
+    STABLE_AUDIO_MODEL_SMALL_SFX = 1,
+    // macOS-only; on iOS/visionOS, requesting this model causes
+    // stable_audio_generate to fail with STABLE_AUDIO_ERR_RT.
+    STABLE_AUDIO_MODEL_MEDIUM = 2
 } StableAudioModel;
 
 // Status codes returned by stable_audio_generate and stable_audio_write_wav.

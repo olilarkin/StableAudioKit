@@ -2,12 +2,17 @@
 
 Swift package and CLI/demo app for running Stable Audio 3 MLX inference on Apple Silicon without a Python runtime dependency.
 
-This repo currently packages the Stable Audio 3 small music and small SFX text-to-audio path:
+Supported text-to-audio variants:
+
+- **`smallMusic`** and **`smallSFX`** — ~0.6 B params, SAME-S decoder. Runs on Apple Silicon Mac, iOS, and visionOS.
+- **`medium`** — 1.4 B params, SAME-L decoder. macOS only (~5–6.5 GB peak memory). Higher quality.
+
+Components shared across variants:
 
 - T5Gemma prompt encoding
-- Stable Audio 3 conditioning
-- DiT sampling for `smallMusic` and `smallSFX`
-- same-s decoder
+- Stable Audio 3 conditioning (text + duration)
+- DiT sampling (differential attention for medium)
+- SAME-S / SAME-L decoder
 - WAV writing for CLI/demo output
 
 The package is structured so audio-to-audio, in-painting, masks, and future Stable Audio Open 3 features can be added without changing the public loading model: apps create a `StableAudioPipeline` from a prepared model directory, then pass typed generation requests.
@@ -64,16 +69,33 @@ python Scripts/prepare_weights.py \
   --destination Resources/Weights
 ```
 
+By default the script prepares the small variants. To also prepare medium (macOS only):
+
+```bash
+python Scripts/prepare_weights.py --download --variants small medium
+```
+
 Generated model files are ignored by git. The expected prepared files are:
 
+Common:
+
 - `t5gemma_f16.safetensors`
+- `t5gemma_tokenizer.model`
+- `manifest.json`
+
+Small (`smallMusic`, `smallSFX`):
+
 - `dit_sm-music_f16.safetensors`
 - `dit_sm-sfx_f16.safetensors`
 - `same_s_decoder_f32.safetensors`
-- `t5gemma_tokenizer.model`
 - `sa3_conditioner_sm-music.safetensors`
 - `sa3_conditioner_sm-sfx.safetensors`
-- `manifest.json`
+
+Medium (macOS only):
+
+- `dit_medium_f16.safetensors` (~2.9 GB)
+- `same_l_decoder_f32.safetensors` (~1.7 GB)
+- `sa3_conditioner_medium.safetensors`
 
 ## CLI Usage
 
@@ -113,6 +135,19 @@ swift run StableAudioCLI \
   --duration 1 \
   --steps 4 \
   -o snare.wav
+```
+
+For the medium model (macOS only):
+
+```bash
+swift run StableAudioCLI \
+  --model medium \
+  --prompt "warm arpeggios over a house beat, 124 BPM" \
+  --duration 10 \
+  --steps 8 \
+  --seed 42 \
+  --model-path Resources/Weights \
+  -o output.wav
 ```
 
 ## Swift API

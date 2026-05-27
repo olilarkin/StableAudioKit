@@ -9,7 +9,7 @@ xcuserdata/
 .swiftpm/
 
 # Local model downloads and generated app weights
-Models/
+/Models/
 Resources/Weights/*.safetensors
 Resources/Weights/*.model
 Resources/Weights/manifest.json

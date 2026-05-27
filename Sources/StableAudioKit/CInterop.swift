@@ -82,7 +82,15 @@ public func stable_audio_generate(
     let pipeline = Unmanaged<StableAudioPipeline>
         .fromOpaque(UnsafeRawPointer(pipelinePtr))
         .takeUnretainedValue()
-    let kind: StableAudioModelKind = modelRaw == 1 ? .smallSFX : .smallMusic
+    let kind: StableAudioModelKind
+    switch modelRaw {
+    case 0: kind = .smallMusic
+    case 1: kind = .smallSFX
+    case 2: kind = .medium
+    default:
+        recordLastError("unknown model id \(modelRaw)")
+        return -2
+    }
     let request = StableAudioGenerationRequest(
         model: kind,
         prompt: String(cString: promptUTF8),

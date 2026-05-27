@@ -43,6 +43,46 @@ public enum StableAudioProgress: Sendable {
     case samplingStep(Int, Int)
 }
 
+protocol DiTModel {
+    var latentLength: Int { get }
+    var ioChannels: Int { get }
+    func callAsFunction(
+        _ x: MLXArray,
+        timestep: MLXArray,
+        crossAttention: MLXArray,
+        globalCondition: MLXArray
+    ) -> MLXArray
+}
+
+protocol AudioDecoder {
+    var samplesPerStrideFrame: Int { get }
+    func decodeChunked(latents: MLXArray) -> MLXArray
+}
+
+extension DiTSmallMusic: DiTModel {
+    var ioChannels: Int { Self.ioChannels }
+}
+
+extension DiTMedium: DiTModel {
+    var ioChannels: Int { Self.ioChannels }
+}
+
+extension SAMESDecoder: AudioDecoder {
+    var samplesPerStrideFrame: Int { Self.outputChannels / 2 }
+
+    func decodeChunked(latents: MLXArray) -> MLXArray {
+        decodeChunked(latents: latents, chunkSize: 8, overlap: 2)
+    }
+}
+
+extension SAMELDecoder: AudioDecoder {
+    var samplesPerStrideFrame: Int { Self.outputChannels / 2 }
+
+    func decodeChunked(latents: MLXArray) -> MLXArray {
+        decodeChunked(latents: latents, chunkSize: 8, overlap: 2)
+    }
+}
+
 public actor StableAudioPipeline {
     public static let sampleRate = 44_100
     public static let samplesPerLatent = 4_096
@@ -52,7 +92,8 @@ public actor StableAudioPipeline {
     private var cachedT5Encoder: T5GemmaEncoder?
     private var cachedConditioners: [StableAudioModelKind: SA3Conditioning] = [:]
     private var cachedDiTWeights: [StableAudioModelKind: [String: MLXArray]] = [:]
-    private var cachedDecoder: SAMESDecoder?
+    private var cachedSAMESDecoder: SAMESDecoder?
+    private var cachedSAMELDecoder: SAMELDecoder?
 
     public init(weightsDirectory: URL) throws {
         self.weights = try StableAudioWeights(directory: weightsDirectory)
@@ -71,6 +112,10 @@ public actor StableAudioPipeline {
         let seconds = max(0.1, request.seconds)
         let steps = max(1, request.steps)
         let latentLength = Self.latentLength(for: seconds)
+
+        guard request.model.isAvailableOnThisPlatform else {
+            throw StableAudioWeightError.unsupportedOnPlatform(request.model)
+        }
 
         let conditioning = try Stream.withNewDefaultStream(device: .gpu) {
             progress?(.stage("T5"))
@@ -104,10 +149,10 @@ public actor StableAudioPipeline {
 
         let audio = try Stream.withNewDefaultStream(device: .gpu) {
             progress?(.stage("Decoder load"))
-            let decoder = try loadDecoder()
+            let decoder = try loadDecoder(for: request.model)
             progress?(.stage("Decoder forward"))
             let patches = decoder.decodeChunked(latents: latents.asType(.float32))
-            let audio = Self.patchedDecode(patches).asType(.float32)
+            let audio = Self.patchedDecode(patches, samplesPerStrideFrame: decoder.samplesPerStrideFrame).asType(.float32)
             eval(audio)
             return audio
         }
@@ -126,7 +171,7 @@ public actor StableAudioPipeline {
     }
 
     private func sample(
-        dit: DiTSmallMusic,
+        dit: any DiTModel,
         latentLength: Int,
         steps: Int,
         seed: UInt64,
@@ -136,7 +181,7 @@ public actor StableAudioPipeline {
     ) -> MLXArray {
         let schedule = Self.buildSchedule(steps: steps)
         var key = MLXRandom.key(seed)
-        var x = MLXRandom.normal([1, 256, latentLength], dtype: .float16, key: key)
+        var x = MLXRandom.normal([1, dit.ioChannels, latentLength], dtype: .float16, key: key)
         eval(x)
 
         for index in 0 ..< steps {
@@ -144,7 +189,7 @@ public actor StableAudioPipeline {
             let current = schedule[index]
             let next = schedule[index + 1]
             let t = MLXArray([current], [1]).asType(.float16)
-            let velocity = dit(x, timestep: t, crossAttention: crossAttention, globalCondition: globalCondition)
+            let velocity = dit.callAsFunction(x, timestep: t, crossAttention: crossAttention, globalCondition: globalCondition)
             let denoised = x - MLXArray(current, dtype: x.dtype) * velocity
             if index < steps - 1 && next > 0 {
                 let split = MLXRandom.split(key: key)
@@ -211,29 +256,52 @@ public actor StableAudioPipeline {
         if let cachedConditioner = cachedConditioners[model] {
             return cachedConditioner
         }
+        try weights.requireReady(for: model)
         let arrays = try loadArrays(url: weights.url(for: "\(model.conditionerResourceName).safetensors"), stream: .cpu)
         let conditioner = SA3Conditioning(weights: arrays)
         cachedConditioners[model] = conditioner
         return conditioner
     }
 
-    private func loadDiT(model: StableAudioModelKind, latentLength: Int) throws -> DiTSmallMusic {
-        if let cachedDiTWeights = cachedDiTWeights[model] {
-            return DiTSmallMusic(weights: cachedDiTWeights, latentLength: latentLength)
+    private func loadDiT(model: StableAudioModelKind, latentLength: Int) throws -> any DiTModel {
+        guard model.isAvailableOnThisPlatform else {
+            throw StableAudioWeightError.unsupportedOnPlatform(model)
         }
+        if let cached = cachedDiTWeights[model] {
+            return makeDiT(model: model, weights: cached, latentLength: latentLength)
+        }
+        try weights.requireReady(for: model)
         let arrays = try loadArrays(url: weights.url(for: "\(model.ditResourceName).safetensors"), stream: .cpu)
         cachedDiTWeights[model] = arrays
-        return DiTSmallMusic(weights: arrays, latentLength: latentLength)
+        return makeDiT(model: model, weights: arrays, latentLength: latentLength)
     }
 
-    private func loadDecoder() throws -> SAMESDecoder {
-        if let cachedDecoder {
-            return cachedDecoder
+    private func makeDiT(model: StableAudioModelKind, weights: [String: MLXArray], latentLength: Int) -> any DiTModel {
+        switch model {
+        case .smallMusic, .smallSFX:
+            return DiTSmallMusic(weights: weights, latentLength: latentLength)
+        case .medium:
+            return DiTMedium(weights: weights, latentLength: latentLength)
         }
-        let arrays = try loadArrays(url: weights.url(for: "same_s_decoder_f32.safetensors"), stream: .cpu)
-        let decoder = SAMESDecoder(weights: arrays)
-        cachedDecoder = decoder
-        return decoder
+    }
+
+    private func loadDecoder(for model: StableAudioModelKind) throws -> any AudioDecoder {
+        switch model.autoencoder {
+        case .sameS:
+            if let cached = cachedSAMESDecoder { return cached }
+            try weights.requireReady(for: model)
+            let arrays = try loadArrays(url: weights.url(for: "same_s_decoder_f32.safetensors"), stream: .cpu)
+            let decoder = SAMESDecoder(weights: arrays)
+            cachedSAMESDecoder = decoder
+            return decoder
+        case .sameL:
+            if let cached = cachedSAMELDecoder { return cached }
+            try weights.requireReady(for: model)
+            let arrays = try loadArrays(url: weights.url(for: "same_l_decoder_f32.safetensors"), stream: .cpu)
+            let decoder = SAMELDecoder(weights: arrays)
+            cachedSAMELDecoder = decoder
+            return decoder
+        }
     }
 
     public static func latentLength(for seconds: Float) -> Int {
@@ -263,11 +331,11 @@ public actor StableAudioPipeline {
         return 1.0 / (1.0 + exp(logSNR))
     }
 
-    static func patchedDecode(_ patches: MLXArray) -> MLXArray {
+    static func patchedDecode(_ patches: MLXArray, samplesPerStrideFrame: Int) -> MLXArray {
         let batch = patches.dim(0)
         let length = patches.dim(2)
-        var x = patches.reshaped(batch, 2, 256, length)
+        var x = patches.reshaped(batch, 2, samplesPerStrideFrame, length)
         x = x.transposed(0, 1, 3, 2)
-        return x.reshaped(batch, 2, length * 256)
+        return x.reshaped(batch, 2, length * samplesPerStrideFrame)
     }
 }

@@ -12,7 +12,7 @@ struct StableAudioCLI: AsyncParsableCommand {
     @Option(name: .long, help: "Text prompt for audio generation.")
     var prompt: String
 
-    @Option(name: .long, help: "Model variant: smallMusic or smallSFX.")
+    @Option(name: .long, help: "Model variant: smallMusic, smallSFX, or medium (macOS only).")
     var model: String = StableAudioModelKind.smallMusic.rawValue
 
     @Option(name: .long, help: "Audio duration in seconds.")
@@ -33,7 +33,7 @@ struct StableAudioCLI: AsyncParsableCommand {
     func run() async throws {
         let actualSeed = seed ?? UInt64.random(in: 0 ..< UInt64(Int32.max))
         guard let modelKind = StableAudioModelKind(rawValue: model) else {
-            throw ValidationError("Unknown model '\(model)'. Use smallMusic or smallSFX.")
+            throw ValidationError("Unknown model '\(model)'. Use smallMusic, smallSFX, or medium.")
         }
         let weightsURL = URL(fileURLWithPath: modelPath)
         let pipeline = try StableAudioPipeline.load(from: weightsURL)
