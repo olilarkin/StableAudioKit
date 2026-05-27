@@ -63,6 +63,70 @@ final class StableAudioKitTests: XCTestCase {
         XCTAssertNotNil(request.initAudio)
     }
 
+    func testInpaintMaskFrameConversion() {
+        let totalSeconds: Float = 30
+        let latentLength = StableAudioPipeline.latentLength(for: totalSeconds)
+        let result = StableAudioPipeline.buildInpaintMask(
+            regions: [InpaintRegion(startSeconds: 10, endSeconds: 20)],
+            totalSeconds: totalSeconds,
+            latentLength: latentLength
+        )
+        XCTAssertEqual(result.frames.count, 1)
+        let (startFrame, endFrame) = result.frames[0]
+        let scale = Float(latentLength) / totalSeconds
+        XCTAssertEqual(startFrame, Int((10 * scale).rounded()))
+        XCTAssertEqual(endFrame, Int((20 * scale).rounded()))
+        XCTAssertEqual(result.mask.shape, [1, 1, latentLength])
+        XCTAssertEqual(result.mask.dtype, .float16)
+    }
+
+    func testInpaintMaskMergesOverlappingRegions() {
+        let merged = StableAudioPipeline.mergeRegions([
+            InpaintRegion(startSeconds: 4, endSeconds: 8),
+            InpaintRegion(startSeconds: 0, endSeconds: 5),
+        ])
+        XCTAssertEqual(merged.count, 1)
+        XCTAssertEqual(merged[0].startSeconds, 0)
+        XCTAssertEqual(merged[0].endSeconds, 8)
+    }
+
+    func testInpaintMaskKeepsDisjointRegionsOrdered() {
+        let merged = StableAudioPipeline.mergeRegions([
+            InpaintRegion(startSeconds: 16, endSeconds: 20),
+            InpaintRegion(startSeconds: 4, endSeconds: 8),
+        ])
+        XCTAssertEqual(merged.count, 2)
+        XCTAssertEqual(merged[0].startSeconds, 4)
+        XCTAssertEqual(merged[1].startSeconds, 16)
+    }
+
+    func testInpaintMaskFullCoverageIsAllOnes() {
+        let totalSeconds: Float = 10
+        let latentLength = StableAudioPipeline.latentLength(for: totalSeconds)
+        let result = StableAudioPipeline.buildInpaintMask(
+            regions: [InpaintRegion(startSeconds: 0, endSeconds: totalSeconds)],
+            totalSeconds: totalSeconds,
+            latentLength: latentLength
+        )
+        XCTAssertEqual(result.frames.count, 1)
+        XCTAssertEqual(result.frames.first?.0, 0)
+        XCTAssertEqual(result.frames.first?.1, latentLength)
+        let sum = result.mask.asType(.float32).sum().item(Float.self)
+        XCTAssertEqual(Int(sum.rounded()), latentLength)
+    }
+
+    func testRequestStoresInpaintRegions() {
+        let regions = [InpaintRegion(startSeconds: 8, endSeconds: 30)]
+        let request = StableAudioGenerationRequest(
+            model: .smallMusic,
+            prompt: "continuation",
+            seconds: 30,
+            initAudio: .samples(values: [0.0, 0.0], sampleRate: 44_100, channelCount: 1),
+            inpaintRegions: regions
+        )
+        XCTAssertEqual(request.inpaintRegions, regions)
+    }
+
     func testAudioReaderRoundTripsSineWave() throws {
         #if canImport(AVFoundation)
         let directory = FileManager.default.temporaryDirectory

@@ -3,6 +3,20 @@ import MLX
 import MLXRandom
 import SentencepieceTokenizer
 
+/// A time region within the requested output (in seconds) that should be
+/// regenerated when inpainting. Audio outside the union of regions is kept
+/// from `initAudio`. Continuation is just a region whose start equals the
+/// source audio's length and whose end equals the requested total duration.
+public struct InpaintRegion: Sendable, Equatable {
+    public var startSeconds: Float
+    public var endSeconds: Float
+
+    public init(startSeconds: Float, endSeconds: Float) {
+        self.startSeconds = startSeconds
+        self.endSeconds = endSeconds
+    }
+}
+
 public struct StableAudioGenerationRequest: Sendable {
     /// Source audio for audio-to-audio generation. Either a file URL (decoded
     /// via AVFoundation in `AudioReader`) or raw interleaved PCM the caller has
@@ -26,6 +40,15 @@ public struct StableAudioGenerationRequest: Sendable {
     /// 0 = identity (return roughly the input audio), 1 = full text-to-audio.
     /// Defaults to 0.9 to match the upstream Python example.
     public var initNoiseLevel: Float
+    /// Optional inpaint/continuation regions over the output timeline (seconds).
+    /// When non-nil, `initAudio` is required and `initNoiseLevel` is ignored —
+    /// the diffusion loop runs the full schedule, regenerating frames inside
+    /// the union of regions while preserving frames outside them via standard
+    /// known-region renoising. Mirrors the upstream Python
+    /// `model.generate(inpaint_audio=..., inpaint_mask_start_seconds=...,
+    /// inpaint_mask_end_seconds=...)` flow. Regions may be unordered and
+    /// overlap; they are sorted and merged before sampling.
+    public var inpaintRegions: [InpaintRegion]?
 
     public init(
         model: StableAudioModelKind = .smallMusic,
@@ -34,7 +57,8 @@ public struct StableAudioGenerationRequest: Sendable {
         steps: Int = 8,
         seed: UInt64 = UInt64.random(in: 0 ..< UInt64(Int32.max)),
         initAudio: InitAudio? = nil,
-        initNoiseLevel: Float = 0.9
+        initNoiseLevel: Float = 0.9,
+        inpaintRegions: [InpaintRegion]? = nil
     ) {
         self.model = model
         self.prompt = prompt
@@ -43,16 +67,26 @@ public struct StableAudioGenerationRequest: Sendable {
         self.seed = seed
         self.initAudio = initAudio
         self.initNoiseLevel = initNoiseLevel
+        self.inpaintRegions = inpaintRegions
     }
 }
 
 public enum StableAudioRequestError: LocalizedError {
     case invalidInitNoiseLevel(Float)
+    case inpaintRequiresInitAudio
+    case emptyInpaintRegions
+    case invalidInpaintRegion(start: Float, end: Float, totalSeconds: Float)
 
     public var errorDescription: String? {
         switch self {
         case .invalidInitNoiseLevel(let value):
             return "initNoiseLevel must be in [0, 1] (got \(value))"
+        case .inpaintRequiresInitAudio:
+            return "inpaintRegions requires initAudio to be set"
+        case .emptyInpaintRegions:
+            return "inpaintRegions must be non-empty when provided (use nil to disable inpainting)"
+        case .invalidInpaintRegion(let start, let end, let total):
+            return "Invalid inpaint region [\(start), \(end)] — must satisfy 0 <= start < end <= \(total)"
         }
     }
 }
@@ -178,6 +212,31 @@ public actor StableAudioPipeline {
             }
         }
 
+        let mergedInpaintRegions: [InpaintRegion]?
+        if let regions = request.inpaintRegions {
+            guard request.initAudio != nil else {
+                throw StableAudioRequestError.inpaintRequiresInitAudio
+            }
+            guard !regions.isEmpty else {
+                throw StableAudioRequestError.emptyInpaintRegions
+            }
+            for region in regions {
+                guard region.startSeconds >= 0,
+                      region.endSeconds > region.startSeconds,
+                      region.endSeconds <= seconds
+                else {
+                    throw StableAudioRequestError.invalidInpaintRegion(
+                        start: region.startSeconds,
+                        end: region.endSeconds,
+                        totalSeconds: seconds
+                    )
+                }
+            }
+            mergedInpaintRegions = Self.mergeRegions(regions)
+        } else {
+            mergedInpaintRegions = nil
+        }
+
         let conditioning = try Stream.withNewDefaultStream(device: .gpu) {
             progress?(.stage("T5"))
             let promptEncoding = try encodePrompt(prompt: request.prompt, maxLength: 256)
@@ -191,16 +250,26 @@ public actor StableAudioPipeline {
             return (crossAttention, globalCondition)
         }
 
-        let initLatents: MLXArray? = try Stream.withNewDefaultStream(device: .gpu) { () -> MLXArray? in
+        let initLatentsAndMask: (MLXArray, MLXArray?)? = try Stream.withNewDefaultStream(device: .gpu) { () -> (MLXArray, MLXArray?)? in
             guard let initAudio = request.initAudio else { return nil }
             progress?(.stage("Encoder load"))
             let encoder = try loadEncoder(for: request.model)
             progress?(.stage("Encoder forward"))
             let prepared = try Self.prepareInitAudio(initAudio, latentLength: latentLength)
             let latents = encoder.encodeChunked(audio: prepared).asType(.float16)
-            eval(latents)
-            return latents
+            let mask: MLXArray? = mergedInpaintRegions.map {
+                Self.buildInpaintMask(regions: $0, totalSeconds: seconds, latentLength: latentLength).mask
+            }
+            if let mask {
+                eval(latents, mask)
+            } else {
+                eval(latents)
+            }
+            return (latents, mask)
         }
+
+        let initLatents = initLatentsAndMask?.0
+        let inpaintMask = initLatentsAndMask?.1
 
         let latents = try Stream.withNewDefaultStream(device: .gpu) {
             progress?(.stage("DiT load"))
@@ -215,6 +284,7 @@ public actor StableAudioPipeline {
                 globalCondition: conditioning.1,
                 initLatents: initLatents,
                 initNoiseLevel: request.initNoiseLevel,
+                inpaintMask: inpaintMask,
                 progress: progress
             )
             eval(latents)
@@ -253,6 +323,7 @@ public actor StableAudioPipeline {
         globalCondition: MLXArray,
         initLatents: MLXArray?,
         initNoiseLevel: Float,
+        inpaintMask: MLXArray? = nil,
         progress: (@Sendable (StableAudioProgress) -> Void)?
     ) -> MLXArray {
         let schedule = Self.buildSchedule(steps: steps)
@@ -262,13 +333,27 @@ public actor StableAudioPipeline {
         let noise = MLXRandom.normal([1, dit.ioChannels, latentLength], dtype: .float16, key: split0.1)
         eval(noise)
 
-        let startIndex = Self.startIndex(for: initLatents == nil ? 1.0 : initNoiseLevel, schedule: schedule)
-        var x: MLXArray
-        if let initLatents {
-            let sigma = schedule[startIndex]
-            let init16 = initLatents.asType(.float16)
-            x = (1.0 - sigma) * init16 + sigma * noise
+        // Inpaint always runs the full schedule starting from pure noise in the
+        // masked region; the unmasked region is reseeded from clean init latents
+        // at each step's noise level. Audio-to-audio (no mask) keeps its
+        // existing partial-schedule behavior driven by initNoiseLevel.
+        let startIndex: Int
+        if inpaintMask != nil {
+            startIndex = 0
         } else {
+            startIndex = Self.startIndex(for: initLatents == nil ? 1.0 : initNoiseLevel, schedule: schedule)
+        }
+
+        let initRef: MLXArray? = initLatents.map { $0.asType(.float16) }
+
+        var x: MLXArray
+        if let initRef, inpaintMask == nil {
+            let sigma = schedule[startIndex]
+            x = (1.0 - sigma) * initRef + sigma * noise
+        } else {
+            // For inpaint, schedule[0] == 1.0 so the unmasked-side blend
+            // collapses to noise as well; using `noise` directly keeps the
+            // first-step path numerically identical.
             x = noise
         }
         eval(x)
@@ -281,17 +366,77 @@ public actor StableAudioPipeline {
             let t = MLXArray([current], [1]).asType(.float16)
             let velocity = dit.callAsFunction(x, timestep: t, crossAttention: crossAttention, globalCondition: globalCondition)
             let denoised = x - MLXArray(current, dtype: x.dtype) * velocity
+
+            let stepNoise: MLXArray?
             if index < steps - 1 && next > 0 {
                 let nextSplit = MLXRandom.split(key: key)
                 key = nextSplit.0
-                let stepNoise = MLXRandom.normal(x.shape, dtype: x.dtype, key: nextSplit.1)
-                x = (1.0 - next) * denoised + next * stepNoise
+                stepNoise = MLXRandom.normal(x.shape, dtype: x.dtype, key: nextSplit.1)
+                x = (1.0 - next) * denoised + next * stepNoise!
             } else {
+                stepNoise = nil
                 x = denoised
             }
+
+            if let mask = inpaintMask, let initRef {
+                let xKnown: MLXArray
+                if let stepNoise {
+                    xKnown = (1.0 - next) * initRef + next * stepNoise
+                } else {
+                    xKnown = initRef
+                }
+                x = mask * x + (1.0 - mask) * xKnown
+            }
+
             eval(x)
         }
         return x
+    }
+
+    static func mergeRegions(_ regions: [InpaintRegion]) -> [InpaintRegion] {
+        guard !regions.isEmpty else { return [] }
+        let sorted = regions.sorted { $0.startSeconds < $1.startSeconds }
+        var merged: [InpaintRegion] = [sorted[0]]
+        for region in sorted.dropFirst() {
+            let last = merged[merged.count - 1]
+            if region.startSeconds <= last.endSeconds {
+                merged[merged.count - 1] = InpaintRegion(
+                    startSeconds: last.startSeconds,
+                    endSeconds: max(last.endSeconds, region.endSeconds)
+                )
+            } else {
+                merged.append(region)
+            }
+        }
+        return merged
+    }
+
+    /// Convert inpaint regions (in output-timeline seconds) into a
+    /// latent-frame mask broadcastable against the DiT input shape
+    /// `[1, ioChannels, latentLength]`. Frames inside any region are set to
+    /// 1.0 (regenerate); frames outside are 0.0 (keep). Regions are assumed
+    /// pre-validated and pre-merged (see `mergeRegions`).
+    static func buildInpaintMask(
+        regions: [InpaintRegion],
+        totalSeconds: Float,
+        latentLength: Int
+    ) -> (frames: [(Int, Int)], mask: MLXArray) {
+        var frames: [(Int, Int)] = []
+        var values = [Float](repeating: 0, count: latentLength)
+        let scale = Float(latentLength) / max(totalSeconds, .leastNormalMagnitude)
+        for region in regions {
+            let rawStart = Int((region.startSeconds * scale).rounded())
+            let rawEnd = Int((region.endSeconds * scale).rounded())
+            let startFrame = max(0, min(latentLength, rawStart))
+            let endFrame = max(0, min(latentLength, rawEnd))
+            guard endFrame > startFrame else { continue }
+            for i in startFrame ..< endFrame {
+                values[i] = 1.0
+            }
+            frames.append((startFrame, endFrame))
+        }
+        let mask = MLXArray(values, [1, 1, latentLength]).asType(.float16)
+        return (frames, mask)
     }
 
     static func startIndex(for noiseLevel: Float, schedule: [Float]) -> Int {

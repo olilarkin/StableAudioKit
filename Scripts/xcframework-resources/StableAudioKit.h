@@ -91,6 +91,40 @@ int32_t stable_audio_generate_a2a(
     int32_t *out_sample_rate,
     double *out_elapsed_seconds);
 
+// Inpainting / continuation variant of stable_audio_generate. init_audio_path
+// must point to a file readable by AVFoundation and is REQUIRED. The mask
+// regions are supplied as two parallel float arrays of length region_count,
+// each in output-timeline seconds (0 <= start < end <= duration_seconds),
+// mirroring the upstream Python
+//     model.generate(inpaint_audio=...,
+//                    inpaint_mask_start_seconds=[..],
+//                    inpaint_mask_end_seconds=[..],
+//                    duration=...)
+// flow. Continuation = a single region whose start equals the source length
+// and end equals duration_seconds (short sources are zero-padded internally
+// to the requested duration before encoding). Regions may overlap and need
+// not be ordered; they are sorted and merged before sampling. The output
+// buffer convention (PLANAR stereo, free with stable_audio_samples_free) is
+// identical to stable_audio_generate.
+int32_t stable_audio_generate_inpaint(
+    StableAudioPipeline *pipeline,
+    StableAudioModel model,
+    const char *prompt_utf8,
+    float duration_seconds,
+    int32_t steps,
+    uint64_t seed,
+    const char *init_audio_path,
+    const float *inpaint_mask_start_seconds,
+    const float *inpaint_mask_end_seconds,
+    size_t region_count,
+    StableAudioProgressCallback progress,
+    void *user_data,
+    float **out_samples,
+    size_t *out_sample_count,
+    int32_t *out_channel_count,
+    int32_t *out_sample_rate,
+    double *out_elapsed_seconds);
+
 // Free a buffer returned by stable_audio_generate. NULL is a no-op.
 void stable_audio_samples_free(float *samples);
 

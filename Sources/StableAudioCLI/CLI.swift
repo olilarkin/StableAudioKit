@@ -36,6 +36,14 @@ struct StableAudioCLI: AsyncParsableCommand {
     @Option(name: .long, help: "Audio-to-audio noise level in [0, 1] (1 = ignore input, 0 = identity).")
     var initNoiseLevel: Float = 0.9
 
+    @Option(name: .long, parsing: .upToNextOption,
+            help: "Inpaint mask region start times in seconds. Repeat per region; must pair 1:1 with --inpaint-mask-end. Requires --init-audio.")
+    var inpaintMaskStart: [Float] = []
+
+    @Option(name: .long, parsing: .upToNextOption,
+            help: "Inpaint mask region end times in seconds. Length must match --inpaint-mask-start.")
+    var inpaintMaskEnd: [Float] = []
+
     func run() async throws {
         let actualSeed = seed ?? UInt64.random(in: 0 ..< UInt64(Int32.max))
         guard let modelKind = StableAudioModelKind(rawValue: model) else {
@@ -46,6 +54,22 @@ struct StableAudioCLI: AsyncParsableCommand {
         let initAudioSource = initAudio.map { path in
             StableAudioGenerationRequest.InitAudio.url(URL(fileURLWithPath: path))
         }
+
+        let inpaintRegions: [InpaintRegion]?
+        if !inpaintMaskStart.isEmpty || !inpaintMaskEnd.isEmpty {
+            guard inpaintMaskStart.count == inpaintMaskEnd.count else {
+                throw ValidationError("--inpaint-mask-start and --inpaint-mask-end must have the same number of values (got \(inpaintMaskStart.count) vs \(inpaintMaskEnd.count)).")
+            }
+            guard initAudio != nil else {
+                throw ValidationError("Inpaint regions require --init-audio.")
+            }
+            inpaintRegions = zip(inpaintMaskStart, inpaintMaskEnd).map {
+                InpaintRegion(startSeconds: $0.0, endSeconds: $0.1)
+            }
+        } else {
+            inpaintRegions = nil
+        }
+
         let request = StableAudioGenerationRequest(
             model: modelKind,
             prompt: prompt,
@@ -53,14 +77,22 @@ struct StableAudioCLI: AsyncParsableCommand {
             steps: steps,
             seed: actualSeed,
             initAudio: initAudioSource,
-            initNoiseLevel: initNoiseLevel
+            initNoiseLevel: initNoiseLevel,
+            inpaintRegions: inpaintRegions
         )
 
         print("Model: \(modelKind.displayName)")
         print("Prompt: \(prompt)")
         print("Duration: \(duration)s, steps: \(steps), seed: \(actualSeed)")
         if let initAudio {
-            print("Init audio: \(initAudio) (noise level \(initNoiseLevel))")
+            if let inpaintRegions {
+                let summary = inpaintRegions
+                    .map { "[\($0.startSeconds)–\($0.endSeconds)]" }
+                    .joined(separator: ", ")
+                print("Inpaint source: \(initAudio); regions (s): \(summary)")
+            } else {
+                print("Init audio: \(initAudio) (noise level \(initNoiseLevel))")
+            }
         }
 
         let result = try await pipeline.generate(request) { event in

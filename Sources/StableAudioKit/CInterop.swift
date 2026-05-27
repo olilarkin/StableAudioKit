@@ -263,6 +263,137 @@ public func stable_audio_samples_free(_ samples: UnsafeMutablePointer<Float>?) {
     samples.deallocate()
 }
 
+/// Inpainting / continuation variant of `stable_audio_generate`. `initAudioPath`
+/// must point to a file readable by AVFoundation; it is required. The mask
+/// regions are supplied as two parallel arrays of length `regionCount`, each
+/// in output-timeline seconds, mirroring the upstream Python
+/// `model.generate(inpaint_audio=..., inpaint_mask_start_seconds=[..],
+/// inpaint_mask_end_seconds=[..], duration=...)` flow. Continuation is just a
+/// region whose start equals the source length and end equals
+/// `durationSeconds`. Regions may overlap and need not be ordered.
+@_cdecl("stable_audio_generate_inpaint")
+public func stable_audio_generate_inpaint(
+    _ pipelinePtr: OpaquePointer?,
+    _ modelRaw: Int32,
+    _ promptUTF8: UnsafePointer<CChar>?,
+    _ durationSeconds: Float,
+    _ steps: Int32,
+    _ seed: UInt64,
+    _ initAudioPath: UnsafePointer<CChar>?,
+    _ inpaintMaskStartSeconds: UnsafePointer<Float>?,
+    _ inpaintMaskEndSeconds: UnsafePointer<Float>?,
+    _ regionCount: Int,
+    _ progress: CProgressCallback?,
+    _ userData: UnsafeMutableRawPointer?,
+    _ outSamples: UnsafeMutablePointer<UnsafeMutablePointer<Float>?>?,
+    _ outSampleCount: UnsafeMutablePointer<Int>?,
+    _ outChannelCount: UnsafeMutablePointer<Int32>?,
+    _ outSampleRate: UnsafeMutablePointer<Int32>?,
+    _ outElapsedSeconds: UnsafeMutablePointer<Double>?
+) -> Int32 {
+    clearLastError()
+    guard let pipelinePtr, let promptUTF8 else {
+        recordLastError("pipeline or prompt is NULL")
+        return -1
+    }
+    guard let initAudioPath else {
+        recordLastError("init_audio_path is required for inpainting")
+        return -1
+    }
+    let path = String(cString: initAudioPath)
+    guard !path.isEmpty else {
+        recordLastError("init_audio_path is empty")
+        return -1
+    }
+    guard regionCount > 0,
+          let startPtr = inpaintMaskStartSeconds,
+          let endPtr = inpaintMaskEndSeconds
+    else {
+        recordLastError("inpaint mask region arrays must be non-empty")
+        return -1
+    }
+
+    let pipeline = Unmanaged<StableAudioPipeline>
+        .fromOpaque(UnsafeRawPointer(pipelinePtr))
+        .takeUnretainedValue()
+    let kind: StableAudioModelKind
+    switch modelRaw {
+    case 0: kind = .smallMusic
+    case 1: kind = .smallSFX
+    case 2: kind = .medium
+    default:
+        recordLastError("unknown model id \(modelRaw)")
+        return -2
+    }
+
+    let startsBuffer = UnsafeBufferPointer(start: startPtr, count: regionCount)
+    let endsBuffer = UnsafeBufferPointer(start: endPtr, count: regionCount)
+    var regions: [InpaintRegion] = []
+    regions.reserveCapacity(regionCount)
+    for i in 0 ..< regionCount {
+        regions.append(InpaintRegion(startSeconds: startsBuffer[i], endSeconds: endsBuffer[i]))
+    }
+
+    let request = StableAudioGenerationRequest(
+        model: kind,
+        prompt: String(cString: promptUTF8),
+        seconds: durationSeconds,
+        steps: Int(steps),
+        seed: seed,
+        initAudio: .url(URL(fileURLWithPath: path)),
+        inpaintRegions: regions
+    )
+
+    let semaphore = DispatchSemaphore(value: 0)
+    let box = ResultBox<StableAudioGenerationResult>()
+    let progressFP = progress
+    let progressUserDataAddress = userData.map { UInt(bitPattern: $0) }
+    Task.detached {
+        do {
+            let result = try await pipeline.generate(request) { event in
+                guard let progressFP else { return }
+                switch event {
+                case .stage(let name):
+                    name.withCString { ptr in
+                        progressFP(-1, -1, ptr, progressUserDataAddress.flatMap {
+                            UnsafeMutableRawPointer(bitPattern: $0)
+                        })
+                    }
+                case .samplingStep(let index, let total):
+                    progressFP(Int32(index), Int32(total), nil, progressUserDataAddress.flatMap {
+                        UnsafeMutableRawPointer(bitPattern: $0)
+                    })
+                }
+            }
+            box.value = .success(result)
+        } catch {
+            box.value = .failure(error)
+        }
+        semaphore.signal()
+    }
+    semaphore.wait()
+
+    switch box.value! {
+    case .success(let result):
+        let count = result.samples.count
+        let buffer = UnsafeMutablePointer<Float>.allocate(capacity: max(count, 1))
+        result.samples.withUnsafeBufferPointer { src in
+            if let base = src.baseAddress {
+                buffer.initialize(from: base, count: count)
+            }
+        }
+        outSamples?.pointee = buffer
+        outSampleCount?.pointee = count
+        outChannelCount?.pointee = Int32(result.channelCount)
+        outSampleRate?.pointee = Int32(result.sampleRate)
+        outElapsedSeconds?.pointee = result.elapsedSeconds
+        return 0
+    case .failure(let error):
+        recordLastError("\(error)")
+        return -3
+    }
+}
+
 @_cdecl("stable_audio_write_wav")
 public func stable_audio_write_wav(
     _ samples: UnsafePointer<Float>?,

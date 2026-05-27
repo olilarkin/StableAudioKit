@@ -205,6 +205,67 @@ python Scripts/prepare_weights.py --download --with-encoder
 
 The encoder file is loaded lazily on first audio-to-audio request; text-to-audio generation does not need it.
 
+### Inpainting / continuation
+
+Pass `initAudio` together with one or more `InpaintRegion`s to regenerate specific time ranges while keeping the rest of the source intact. This mirrors the upstream Python `model.generate(inpaint_audio=..., inpaint_mask_start_seconds=..., inpaint_mask_end_seconds=..., duration=...)` flow and reuses the SAME encoder. Regions are given over the *output* timeline in seconds; they may be unordered and overlap (they are sorted and merged automatically). When `inpaintRegions` is set, `initNoiseLevel` is ignored and the full diffusion schedule runs — masked frames are regenerated, unmasked frames are reseeded from the encoded source at every step.
+
+```swift
+// Regenerate seconds 4–8 of a 30 s source.
+let request = StableAudioGenerationRequest(
+    model: .smallMusic,
+    prompt: "punchy kick drum fill",
+    seconds: 30,
+    initAudio: .url(sourceAudioURL),
+    inpaintRegions: [InpaintRegion(startSeconds: 4, endSeconds: 8)]
+)
+```
+
+Continuation is just an inpaint region starting at the source's length and ending at the requested duration. Short sources are zero-padded internally to the requested duration before encoding, so the trailing region behaves as pure regeneration conditioned on the leading audio:
+
+```swift
+// Extend an 8 s source out to 30 s.
+let request = StableAudioGenerationRequest(
+    model: .smallMusic,
+    prompt: "warm pad continues",
+    seconds: 30,
+    initAudio: .url(eightSecondAudioURL),
+    inpaintRegions: [InpaintRegion(startSeconds: 8, endSeconds: 30)]
+)
+```
+
+From the CLI, regions are supplied as parallel lists:
+
+```bash
+# Inpaint a single region.
+swift run StableAudioCLI \
+  --prompt "punchy kick drum fill" \
+  --init-audio source.wav \
+  --duration 30 \
+  --inpaint-mask-start 4 \
+  --inpaint-mask-end 8 \
+  -o inpainted.wav
+
+# Continuation: extend an 8 s clip out to 30 s.
+swift run StableAudioCLI \
+  --prompt "warm pad continues" \
+  --init-audio src.wav \
+  --duration 30 \
+  --inpaint-mask-start 8 \
+  --inpaint-mask-end 30 \
+  -o continued.wav
+
+# Multiple non-contiguous regions.
+swift run StableAudioCLI \
+  --prompt "punchy kick drum fill" \
+  --init-audio source.wav \
+  --duration 30 \
+  --inpaint-mask-start 4 16 \
+  --inpaint-mask-end 8 20 \
+  -o inpainted.wav
+```
+
+Inpainting requires the same SAME encoder weights as audio-to-audio — prepare them once with `python Scripts/prepare_weights.py --download --with-encoder`.
+
 ## Current Scope
 
-The package API intentionally separates model loading, request configuration, sampling, and audio writing. Inference modes currently supported: text-to-audio and audio-to-audio. Inpainting / continuation (`inpaint_audio` in the upstream Python API) is the next planned mode and reuses the same SAME encoder added for audio-to-audio.
+The package API intentionally separates model loading, request configuration, sampling, and audio writing. Inference modes currently supported: text-to-audio, audio-to-audio, and inpainting / continuation. All three modes are exposed through both the Swift `StableAudioPipeline` API and the C ABI declared in `Scripts/xcframework-resources/StableAudioKit.h` (entry points `stable_audio_generate`, `stable_audio_generate_a2a`, `stable_audio_generate_inpaint`). Both surfaces ship in every slice of the `StableAudioKit.xcframework` produced by `Scripts/build-xcframework.sh` (macOS, iOS, iOS-simulator, visionOS, visionOS-simulator).
