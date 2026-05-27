@@ -119,3 +119,10 @@ mkdir -p "$OUTPUT_DIR"
 xcrun metallib -o "$OUTPUT_LIB" "${AIR_FILES[@]}"
 
 echo "Done: $OUTPUT_LIB"
+
+# Also copy into the SwiftPM test bundle so `swift test` can find the metallib.
+TEST_BUNDLE_DIR="$PACKAGE_DIR/.build/arm64-apple-macosx/debug/StableAudioKitPackageTests.xctest/Contents/MacOS"
+if [ -d "$TEST_BUNDLE_DIR" ]; then
+    cp "$OUTPUT_LIB" "$TEST_BUNDLE_DIR/"
+    echo "Copied to test bundle: $TEST_BUNDLE_DIR/mlx.metallib"
+fi

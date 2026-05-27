@@ -149,6 +149,114 @@ public func stable_audio_generate(
     }
 }
 
+/// Audio-to-audio variant of `stable_audio_generate`. `initAudioPath` must
+/// point to a file readable by AVFoundation (WAV/AIFF/CAF/etc); a NULL or
+/// empty path makes this equivalent to text-to-audio. `initNoiseLevel` is
+/// clamped to `[0, 1]`; 1.0 is byte-for-byte equivalent to text-to-audio.
+@_cdecl("stable_audio_generate_a2a")
+public func stable_audio_generate_a2a(
+    _ pipelinePtr: OpaquePointer?,
+    _ modelRaw: Int32,
+    _ promptUTF8: UnsafePointer<CChar>?,
+    _ durationSeconds: Float,
+    _ steps: Int32,
+    _ seed: UInt64,
+    _ initAudioPath: UnsafePointer<CChar>?,
+    _ initNoiseLevel: Float,
+    _ progress: CProgressCallback?,
+    _ userData: UnsafeMutableRawPointer?,
+    _ outSamples: UnsafeMutablePointer<UnsafeMutablePointer<Float>?>?,
+    _ outSampleCount: UnsafeMutablePointer<Int>?,
+    _ outChannelCount: UnsafeMutablePointer<Int32>?,
+    _ outSampleRate: UnsafeMutablePointer<Int32>?,
+    _ outElapsedSeconds: UnsafeMutablePointer<Double>?
+) -> Int32 {
+    clearLastError()
+    guard let pipelinePtr, let promptUTF8 else {
+        recordLastError("pipeline or prompt is NULL")
+        return -1
+    }
+    let pipeline = Unmanaged<StableAudioPipeline>
+        .fromOpaque(UnsafeRawPointer(pipelinePtr))
+        .takeUnretainedValue()
+    let kind: StableAudioModelKind
+    switch modelRaw {
+    case 0: kind = .smallMusic
+    case 1: kind = .smallSFX
+    case 2: kind = .medium
+    default:
+        recordLastError("unknown model id \(modelRaw)")
+        return -2
+    }
+
+    var initAudio: StableAudioGenerationRequest.InitAudio?
+    if let initAudioPath {
+        let path = String(cString: initAudioPath)
+        if !path.isEmpty {
+            initAudio = .url(URL(fileURLWithPath: path))
+        }
+    }
+    let clampedNoise = max(0, min(1, initNoiseLevel))
+    let request = StableAudioGenerationRequest(
+        model: kind,
+        prompt: String(cString: promptUTF8),
+        seconds: durationSeconds,
+        steps: Int(steps),
+        seed: seed,
+        initAudio: initAudio,
+        initNoiseLevel: clampedNoise
+    )
+
+    let semaphore = DispatchSemaphore(value: 0)
+    let box = ResultBox<StableAudioGenerationResult>()
+    let progressFP = progress
+    let progressUserDataAddress = userData.map { UInt(bitPattern: $0) }
+    Task.detached {
+        do {
+            let result = try await pipeline.generate(request) { event in
+                guard let progressFP else { return }
+                switch event {
+                case .stage(let name):
+                    name.withCString { ptr in
+                        progressFP(-1, -1, ptr, progressUserDataAddress.flatMap {
+                            UnsafeMutableRawPointer(bitPattern: $0)
+                        })
+                    }
+                case .samplingStep(let index, let total):
+                    progressFP(Int32(index), Int32(total), nil, progressUserDataAddress.flatMap {
+                        UnsafeMutableRawPointer(bitPattern: $0)
+                    })
+                }
+            }
+            box.value = .success(result)
+        } catch {
+            box.value = .failure(error)
+        }
+        semaphore.signal()
+    }
+    semaphore.wait()
+
+    switch box.value! {
+    case .success(let result):
+        let count = result.samples.count
+        let buffer = UnsafeMutablePointer<Float>.allocate(capacity: max(count, 1))
+        result.samples.withUnsafeBufferPointer { src in
+            if let base = src.baseAddress {
+                buffer.initialize(from: base, count: count)
+            }
+        }
+        outSamples?.pointee = buffer
+        outSampleCount?.pointee = count
+        outChannelCount?.pointee = Int32(result.channelCount)
+        outSampleRate?.pointee = Int32(result.sampleRate)
+        outElapsedSeconds?.pointee = result.elapsedSeconds
+        return 0
+    case .failure(let error):
+        recordLastError("\(error)")
+        return -3
+    }
+}
+
 @_cdecl("stable_audio_samples_free")
 public func stable_audio_samples_free(_ samples: UnsafeMutablePointer<Float>?) {
     guard let samples else { return }

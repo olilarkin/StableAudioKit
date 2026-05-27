@@ -30,6 +30,12 @@ struct StableAudioCLI: AsyncParsableCommand {
     @Option(name: [.customShort("o"), .long], help: "Output WAV file path.")
     var output: String?
 
+    @Option(name: .long, help: "Optional source audio file for audio-to-audio generation.")
+    var initAudio: String?
+
+    @Option(name: .long, help: "Audio-to-audio noise level in [0, 1] (1 = ignore input, 0 = identity).")
+    var initNoiseLevel: Float = 0.9
+
     func run() async throws {
         let actualSeed = seed ?? UInt64.random(in: 0 ..< UInt64(Int32.max))
         guard let modelKind = StableAudioModelKind(rawValue: model) else {
@@ -37,17 +43,25 @@ struct StableAudioCLI: AsyncParsableCommand {
         }
         let weightsURL = URL(fileURLWithPath: modelPath)
         let pipeline = try StableAudioPipeline.load(from: weightsURL)
+        let initAudioSource = initAudio.map { path in
+            StableAudioGenerationRequest.InitAudio.url(URL(fileURLWithPath: path))
+        }
         let request = StableAudioGenerationRequest(
             model: modelKind,
             prompt: prompt,
             seconds: duration,
             steps: steps,
-            seed: actualSeed
+            seed: actualSeed,
+            initAudio: initAudioSource,
+            initNoiseLevel: initNoiseLevel
         )
 
         print("Model: \(modelKind.displayName)")
         print("Prompt: \(prompt)")
         print("Duration: \(duration)s, steps: \(steps), seed: \(actualSeed)")
+        if let initAudio {
+            print("Init audio: \(initAudio) (noise level \(initNoiseLevel))")
+        }
 
         let result = try await pipeline.generate(request) { event in
             switch event {

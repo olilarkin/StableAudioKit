@@ -171,6 +171,40 @@ let result = try await pipeline.generate(request) { progress in
 try AudioWriter.write(result, to: outputURL)
 ```
 
+### Audio-to-audio
+
+Pass an existing audio file (or already-decoded PCM) as `initAudio` and a noise level in `[0, 1]` to restyle a recording with a text prompt, mirroring the upstream Python `model.generate(init_audio=..., init_noise_level=0.9, ...)` API. A level of 1.0 ignores the input (equivalent to text-to-audio); 0.0 returns roughly the input audio through the autoencoder.
+
+```swift
+let request = StableAudioGenerationRequest(
+    model: .smallMusic,
+    prompt: "bossa nova bassline",
+    seconds: 30,
+    initAudio: .url(sourceAudioURL),
+    initNoiseLevel: 0.9
+)
+let result = try await pipeline.generate(request)
+```
+
+Or from the CLI:
+
+```bash
+swift run StableAudioCLI \
+  --prompt "bossa nova bassline" \
+  --init-audio source.wav \
+  --init-noise-level 0.9 \
+  --duration 30 \
+  -o restyled.wav
+```
+
+Audio-to-audio requires the SAME encoder weights in addition to the standard text-to-audio files. Prepare them with `--with-encoder`:
+
+```bash
+python Scripts/prepare_weights.py --download --with-encoder
+```
+
+The encoder file is loaded lazily on first audio-to-audio request; text-to-audio generation does not need it.
+
 ## Current Scope
 
-The package API intentionally separates model loading, request configuration, sampling, and audio writing. The current inference implementation is text-to-audio only. Audio-to-audio, in-painting, negative conditioning, and mask-conditioned generation should be added as new request modes backed by additional encoder/conditioning components, not by changing where apps store or authorize model files.
+The package API intentionally separates model loading, request configuration, sampling, and audio writing. Inference modes currently supported: text-to-audio and audio-to-audio. Inpainting / continuation (`inpaint_audio` in the upstream Python API) is the next planned mode and reuses the same SAME encoder added for audio-to-audio.

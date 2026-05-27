@@ -70,6 +70,27 @@ int32_t stable_audio_generate(
     int32_t *out_sample_rate,
     double *out_elapsed_seconds);
 
+// Audio-to-audio variant of stable_audio_generate. init_audio_path must point
+// to a file readable by AVFoundation (WAV/AIFF/CAF/etc); a NULL or empty path
+// makes this equivalent to text-to-audio. init_noise_level is clamped to [0,1];
+// 1.0 is byte-for-byte equivalent to text-to-audio.
+int32_t stable_audio_generate_a2a(
+    StableAudioPipeline *pipeline,
+    StableAudioModel model,
+    const char *prompt_utf8,
+    float duration_seconds,
+    int32_t steps,
+    uint64_t seed,
+    const char *init_audio_path,
+    float init_noise_level,
+    StableAudioProgressCallback progress,
+    void *user_data,
+    float **out_samples,
+    size_t *out_sample_count,
+    int32_t *out_channel_count,
+    int32_t *out_sample_rate,
+    double *out_elapsed_seconds);
+
 // Free a buffer returned by stable_audio_generate. NULL is a no-op.
 void stable_audio_samples_free(float *samples);
 

@@ -38,6 +38,14 @@ SMALL_FILES = [
     },
 ]
 
+SMALL_ENCODER_FILES = [
+    {
+        "role": "same-s encoder",
+        "sourceFileName": "same_s_encoder_f32.npz",
+        "fileName": "same_s_encoder_f32.safetensors",
+    },
+]
+
 MEDIUM_FILES = [
     {
         "role": "DiT medium",
@@ -48,6 +56,14 @@ MEDIUM_FILES = [
         "role": "same-l decoder",
         "sourceFileName": "same_l_decoder_f32.npz",
         "fileName": "same_l_decoder_f32.safetensors",
+    },
+]
+
+MEDIUM_ENCODER_FILES = [
+    {
+        "role": "same-l encoder",
+        "sourceFileName": "same_l_encoder_f32.npz",
+        "fileName": "same_l_encoder_f32.safetensors",
     },
 ]
 
@@ -197,6 +213,12 @@ def main() -> None:
         default=["small"],
         help="Model size(s) to prepare. Defaults to the small variants.",
     )
+    parser.add_argument(
+        "--with-encoder",
+        action="store_true",
+        help="Also convert the SAME encoder weights needed for audio-to-audio "
+        "and inpainting (same_s_encoder_f32.npz / same_l_encoder_f32.npz).",
+    )
     args = parser.parse_args()
 
     variants = set(args.variants)
@@ -214,9 +236,13 @@ def main() -> None:
     conditioner_sources = []
     if "small" in variants:
         files_to_convert.extend(SMALL_FILES)
+        if args.with_encoder:
+            files_to_convert.extend(SMALL_ENCODER_FILES)
         conditioner_sources.extend(SMALL_CONDITIONER_FILES)
     if "medium" in variants:
         files_to_convert.extend(MEDIUM_FILES)
+        if args.with_encoder:
+            files_to_convert.extend(MEDIUM_ENCODER_FILES)
         conditioner_sources.extend(MEDIUM_CONDITIONER_FILES)
 
     manifest_files = []

@@ -103,6 +103,28 @@ public struct StableAudioWeights: Sendable {
         }
     }
 
+    /// Files needed in addition to `variantFiles(for:)` to run audio-to-audio
+    /// generation (the SAME encoder for the variant's autoencoder family).
+    static func encoderFiles(for kind: StableAudioModelKind) -> [WeightFile] {
+        switch kind {
+        case .smallMusic, .smallSFX:
+            return [WeightFile(role: "same-s encoder", fileName: "same_s_encoder_f32.safetensors", minimumBytes: 1, sourceFileName: "same_s_encoder_f32.npz")]
+        case .medium:
+            return [WeightFile(role: "same-l encoder", fileName: "same_l_encoder_f32.safetensors", minimumBytes: 1, sourceFileName: "same_l_encoder_f32.npz")]
+        }
+    }
+
+    /// Verifies that the encoder file required for audio-to-audio on the given
+    /// model variant is present. Throws `StableAudioWeightError.incomplete`
+    /// otherwise so callers can surface a clear error before sampling starts.
+    public func requireEncoderReady(for kind: StableAudioModelKind) throws {
+        var required = Set<String>()
+        for file in Self.encoderFiles(for: kind) {
+            required.insert(file.fileName)
+        }
+        try requireFiles(required)
+    }
+
     private static let alwaysRequiredFileNames: [String] = [
         "t5gemma_f16.safetensors",
         "t5gemma_tokenizer.model",

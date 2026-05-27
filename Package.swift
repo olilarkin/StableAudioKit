@@ -38,7 +38,10 @@ let package = Package(
         ),
         .testTarget(
             name: "StableAudioKitTests",
-            dependencies: ["StableAudioKit"]
+            dependencies: [
+                "StableAudioKit",
+                .product(name: "MLX", package: "mlx-swift"),
+            ]
         ),
     ]
 )
