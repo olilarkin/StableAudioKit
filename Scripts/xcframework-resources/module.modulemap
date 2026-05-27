@@ -1,0 +1,6 @@
+framework module StableAudioKit {
+    umbrella header "StableAudioKit.h"
+    export *
+    module * { export * }
+    link "c++"
+}

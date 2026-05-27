@@ -19,18 +19,39 @@ PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
 OUTPUT_DIR="${1:-"$PACKAGE_DIR/.build/arm64-apple-macosx/debug"}"
 OUTPUT_LIB="$OUTPUT_DIR/mlx.metallib"
 
-# Find the SPM-resolved mlx-swift checkout (prefer local override)
-MLXSWIFT_LOCAL="$PACKAGE_DIR/../mlx-swift"
-MLXSWIFT_SPM="$PACKAGE_DIR/.build/checkouts/mlx-swift"
+# Target triple for AIR compilation. Override via METAL_TARGET to target
+# iOS, visionOS, simulators, etc. The default targets macOS 14 arm64.
+METAL_TARGET="${METAL_TARGET:-air64-apple-macosx14.0}"
 
-if [ -d "$MLXSWIFT_LOCAL/Source/Cmlx/mlx-generated/metal" ]; then
-    METAL_BASE="$MLXSWIFT_LOCAL/Source/Cmlx"
-elif [ -d "$MLXSWIFT_SPM/Source/Cmlx/mlx-generated/metal" ]; then
-    METAL_BASE="$MLXSWIFT_SPM/Source/Cmlx"
-else
-    echo "error: Cannot find mlx-swift Metal sources." >&2
-    echo "  Tried: $MLXSWIFT_LOCAL" >&2
-    echo "  Tried: $MLXSWIFT_SPM" >&2
+# Search locations for the mlx-swift checkout, in order. The caller can prepend
+# an extra path via MLX_SWIFT_DIR — useful when xcodebuild has resolved the
+# package into its DerivedData SourcePackages directory.
+SEARCH_DIRS=()
+if [ -n "${MLX_SWIFT_DIR:-}" ]; then
+    SEARCH_DIRS+=("$MLX_SWIFT_DIR")
+fi
+SEARCH_DIRS+=(
+    "$PACKAGE_DIR/../mlx-swift"
+    "$PACKAGE_DIR/.build/checkouts/mlx-swift"
+)
+# Plus any SourcePackages checkouts under build/xcframework-work derived dirs.
+while IFS= read -r -d '' found; do
+    SEARCH_DIRS+=("$found")
+done < <(find "$PACKAGE_DIR/build" -type d -name "mlx-swift" -path "*/SourcePackages/checkouts/*" -print0 2>/dev/null)
+
+METAL_BASE=""
+for candidate in "${SEARCH_DIRS[@]}"; do
+    if [ -d "$candidate/Source/Cmlx/mlx-generated/metal" ]; then
+        METAL_BASE="$candidate/Source/Cmlx"
+        break
+    fi
+done
+
+if [ -z "$METAL_BASE" ]; then
+    echo "error: Cannot find mlx-swift Metal sources. Tried:" >&2
+    for d in "${SEARCH_DIRS[@]}"; do
+        echo "  $d" >&2
+    done
     exit 1
 fi
 
@@ -72,7 +93,7 @@ for metal_file in "${METAL_FILES[@]}"; do
     echo "  Compiling $base.metal ..."
     if ! xcrun metal \
         -arch air64 \
-        -target "air64-apple-macosx14.0" \
+        -target "$METAL_TARGET" \
         "${INCLUDE_ARGS[@]}" \
         -c "$metal_file" \
         -o "$air_file" 2>&1; then
