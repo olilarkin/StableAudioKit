@@ -1,6 +1,17 @@
-#!/usr/bin/env python3
-# Keep this body in sync with Scripts/prepare_weights_standalone.py, which is
-# the PEP 723 single-file version shipped as a GitHub Release asset.
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.10"
+# dependencies = [
+#     "mlx",
+#     "numpy",
+#     "huggingface_hub[cli]>=1.10,<2",
+#     "typer>=0.16,<1",
+# ]
+# ///
+# Standalone, self-contained twin of Scripts/prepare_weights.py for users who
+# only download this single file from a GitHub Release. Keep the body of this
+# file in sync with Scripts/prepare_weights.py; the dependency list above
+# mirrors requirements.txt.
 from __future__ import annotations
 
 import argparse

@@ -173,9 +173,6 @@ jobs:
           Drop \`StableAudioKit.xcframework\` into any Xcode project targeting macOS 14+, iOS 17+, or visionOS 1+. See the repository README for the public \`StableAudioPipeline\` API.
           EOF
 
-      - name: Copy standalone weights script to workspace root
-        run: cp Scripts/prepare_weights_standalone.py ./prepare_weights_standalone.py
-
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -187,7 +184,7 @@ jobs:
           files: |
             ${{ env.XCF_ZIP }}
             ${{ env.CLI_TAR }}
-            prepare_weights_standalone.py
+            Scripts/prepare_weights_standalone.py
 
       - name: Upload workflow artifacts (for inspection on failure)
         if: always()
@@ -197,6 +194,6 @@ jobs:
           path: |
             ${{ env.XCF_ZIP }}
             ${{ env.CLI_TAR }}
-            prepare_weights_standalone.py
+            Scripts/prepare_weights_standalone.py
             RELEASE_NOTES.md
           if-no-files-found: warn
