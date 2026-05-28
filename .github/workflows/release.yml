@@ -85,6 +85,7 @@ jobs:
           mkdir -p "dist/${CLI_STAGE}"
           cp .build/release/StableAudioCLI "dist/${CLI_STAGE}/StableAudioCLI"
           cp .build/release/mlx.metallib "dist/${CLI_STAGE}/mlx.metallib"
+          cp Scripts/prepare_weights_standalone.py "dist/${CLI_STAGE}/prepare_weights_standalone.py"
           chmod +x "dist/${CLI_STAGE}/StableAudioCLI"
           cat > "dist/${CLI_STAGE}/README.txt" <<EOF
           StableAudioCLI ${VERSION} (macOS arm64)
@@ -98,8 +99,8 @@ jobs:
           it beside itself at runtime.
 
           Weights: download and convert the gated Stable Audio 3 weights with
-          prepare_weights_standalone.py from the same release. See the
-          release notes for the full uv command.
+          the bundled prepare_weights_standalone.py. See the release notes for
+          the full uv command.
 
           Repo: https://github.com/olilarkin/StableAudioKit
           EOF
