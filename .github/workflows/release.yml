@@ -1,0 +1,202 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version label (no leading v). Blank = short SHA.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve version and artifact names
+        run: |
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            RAW="${{ github.ref_name }}"
+            VERSION="${RAW#v}"
+          elif [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION="$(git rev-parse --short HEAD)"
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+          echo "XCF_ZIP=StableAudioKit-${VERSION}.xcframework.zip" >> "$GITHUB_ENV"
+          echo "CLI_TAR=StableAudioCLI-${VERSION}-macos-arm64.tar.gz" >> "$GITHUB_ENV"
+          echo "CLI_STAGE=StableAudioCLI-${VERSION}-macos-arm64" >> "$GITHUB_ENV"
+
+      - name: Select newest Xcode and ensure Metal toolchain
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
+          [ -z "$XCODE" ] && XCODE=/Applications/Xcode.app
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          swift --version
+          # Xcode 16.3+ ships the Metal toolchain as a separate download.
+          if ! xcrun metal --version >/dev/null 2>&1; then
+            echo "Metal toolchain missing; downloading..."
+            xcodebuild -downloadComponent MetalToolchain
+          fi
+
+      - name: Build XCFramework (all platforms)
+        env:
+          MLXSWIFT_USE_REMOTE: "1"
+        run: ./Scripts/build-xcframework.sh build/xcframework
+
+      - name: Zip XCFramework
+        run: |
+          cd build/xcframework
+          zip -r --symlinks "$GITHUB_WORKSPACE/${XCF_ZIP}" StableAudioKit.xcframework
+
+      - name: Rewrite Package.swift to use remote mlx-swift
+        run: |
+          python3 - Package.swift "https://github.com/olilarkin/mlx-swift" "main" <<'PY'
+          import re, sys, pathlib
+          path, url, branch = sys.argv[1], sys.argv[2], sys.argv[3]
+          src = pathlib.Path(path).read_text()
+          pathlib.Path(path).write_text(re.sub(
+              r'\.package\(\s*path:\s*"\.\./mlx-swift"\s*\)',
+              f'.package(url: "{url}", branch: "{branch}")', src))
+          PY
+          rm -f Package.resolved
+
+      - name: Build StableAudioCLI (release)
+        run: swift build -c release --product StableAudioCLI
+
+      - name: Compile mlx.metallib next to CLI binary
+        run: ./Scripts/compile-mlx-metallib.sh .build/release
+
+      - name: Stage CLI tarball
+        run: |
+          mkdir -p "dist/${CLI_STAGE}"
+          cp .build/release/StableAudioCLI "dist/${CLI_STAGE}/StableAudioCLI"
+          cp .build/release/mlx.metallib "dist/${CLI_STAGE}/mlx.metallib"
+          chmod +x "dist/${CLI_STAGE}/StableAudioCLI"
+          cat > "dist/${CLI_STAGE}/README.txt" <<EOF
+          StableAudioCLI ${VERSION} (macOS arm64)
+
+          This binary is unsigned and un-notarized. Before running, clear the
+          macOS quarantine attribute that Gatekeeper sets on downloads:
+
+              xattr -dr com.apple.quarantine StableAudioCLI mlx.metallib
+
+          mlx.metallib MUST sit next to StableAudioCLI - the binary looks for
+          it beside itself at runtime.
+
+          Weights: download and convert the gated Stable Audio 3 weights with
+          prepare_weights_standalone.py from the same release. See the
+          release notes for the full uv command.
+
+          Repo: https://github.com/olilarkin/StableAudioKit
+          EOF
+          tar -czf "${CLI_TAR}" -C dist "${CLI_STAGE}"
+
+      - name: Generate release notes
+        run: |
+          cat > RELEASE_NOTES.md <<EOF
+          # StableAudioKit v${VERSION}
+
+          ## Assets
+
+          - **\`${XCF_ZIP}\`** — multi-platform XCFramework (macOS, iOS, iOS Simulator, visionOS, visionOS Simulator). Statically bundles \`mlx-swift\` and \`swift-sentencepiece\`; each slice ships a precompiled \`mlx.metallib\`.
+          - **\`${CLI_TAR}\`** — \`StableAudioCLI\` for macOS arm64 with the colocated MLX metal library.
+          - **\`prepare_weights_standalone.py\`** — single-file Python helper for downloading and converting the gated Stability AI weights (PEP 723 inline-script — run with \`uv\`).
+
+          ## Using the CLI
+
+          1. Download and unpack:
+             \`\`\`bash
+             tar -xzf ${CLI_TAR}
+             cd ${CLI_STAGE}
+             \`\`\`
+
+          2. **Unblock Gatekeeper.** This binary is unsigned and un-notarized. macOS will quarantine it on download. Clear the attribute before launching:
+             \`\`\`bash
+             xattr -dr com.apple.quarantine StableAudioCLI mlx.metallib
+             \`\`\`
+
+          3. Keep \`mlx.metallib\` next to \`StableAudioCLI\` — the binary looks for the metal library beside itself at runtime.
+
+          ## Preparing weights
+
+          The Stable Audio 3 weights are gated. Request access on Hugging Face first:
+
+          - https://huggingface.co/stabilityai/stable-audio-3-optimized
+
+          Then authenticate either with \`hf auth login\` or by exporting \`HF_TOKEN=...\`.
+
+          The recommended way to run the prep script is via [\`uv\`](https://docs.astral.sh/uv/) — it reads the PEP 723 header inside \`prepare_weights_standalone.py\` and provisions an isolated environment automatically:
+
+          \`\`\`bash
+          # One-time: install uv
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+
+          # Authorize (either form)
+          hf auth login                  # interactive
+          export HF_TOKEN=hf_xxx          # non-interactive
+
+          # Download and convert
+          uv run prepare_weights_standalone.py \\
+            --download \\
+            --variants small medium \\
+            --with-encoder \\
+            --destination ./Weights
+          \`\`\`
+
+          Then point the CLI at the output directory:
+
+          \`\`\`bash
+          ./StableAudioCLI \\
+            --model smallMusic \\
+            --prompt "lofi house loop, 120 BPM" \\
+            --duration 10 \\
+            --model-path ./Weights \\
+            -o output.wav
+          \`\`\`
+
+          ## Using the XCFramework
+
+          Drop \`StableAudioKit.xcframework\` into any Xcode project targeting macOS 14+, iOS 17+, or visionOS 1+. See the repository README for the public \`StableAudioPipeline\` API.
+          EOF
+
+      - name: Copy standalone weights script to workspace root
+        run: cp Scripts/prepare_weights_standalone.py ./prepare_weights_standalone.py
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('v{0}', env.VERSION) }}
+          name: StableAudioKit ${{ env.VERSION }}
+          body_path: RELEASE_NOTES.md
+          draft: ${{ github.event_name == 'workflow_dispatch' }}
+          prerelease: false
+          files: |
+            ${{ env.XCF_ZIP }}
+            ${{ env.CLI_TAR }}
+            prepare_weights_standalone.py
+
+      - name: Upload workflow artifacts (for inspection on failure)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ env.VERSION }}
+          path: |
+            ${{ env.XCF_ZIP }}
+            ${{ env.CLI_TAR }}
+            prepare_weights_standalone.py
+            RELEASE_NOTES.md
+          if-no-files-found: warn

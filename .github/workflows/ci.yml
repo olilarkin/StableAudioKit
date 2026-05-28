@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select newest Xcode and ensure Metal toolchain
+        run: |
+          XCODE="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
+          [ -z "$XCODE" ] && XCODE=/Applications/Xcode.app
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          swift --version
+          # Xcode 16.3+ ships the Metal toolchain as a separate download.
+          if ! xcrun metal --version >/dev/null 2>&1; then
+            echo "Metal toolchain missing; downloading..."
+            xcodebuild -downloadComponent MetalToolchain
+          fi
+
+      - name: Rewrite Package.swift to use remote mlx-swift
+        run: |
+          python3 - Package.swift "https://github.com/olilarkin/mlx-swift" "main" <<'PY'
+          import re, sys, pathlib
+          path, url, branch = sys.argv[1], sys.argv[2], sys.argv[3]
+          src = pathlib.Path(path).read_text()
+          pathlib.Path(path).write_text(re.sub(
+              r'\.package\(\s*path:\s*"\.\./mlx-swift"\s*\)',
+              f'.package(url: "{url}", branch: "{branch}")', src))
+          PY
+          rm -f Package.resolved
+
+      - name: swift build StableAudioKit (library)
+        run: swift build --product StableAudioKit
+
+      - name: swift build StableAudioCLI
+        run: swift build --product StableAudioCLI
+
+      - name: Build macOS XCFramework slice (smoke)
+        env:
+          MLXSWIFT_USE_REMOTE: "1"
+        run: ./Scripts/build-xcframework.sh build/xcframework macos
+
+      # TODO: swift test once we have a way to ship/fetch a tiny test
+      # fixture set of weights. Requires HF_TOKEN secret + the colocated
+      # mlx.metallib produced by Scripts/compile-mlx-metallib.sh.
