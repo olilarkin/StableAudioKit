@@ -38,11 +38,19 @@ jobs:
           echo "CLI_TAR=StableAudioCLI-${VERSION}-macos-arm64.tar.gz" >> "$GITHUB_ENV"
           echo "CLI_STAGE=StableAudioCLI-${VERSION}-macos-arm64" >> "$GITHUB_ENV"
 
-      - name: Select Xcode
+      - name: Select newest Xcode and ensure Metal toolchain
         run: |
-          sudo xcode-select -s /Applications/Xcode_15.4.app
+          XCODE="$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)"
+          [ -z "$XCODE" ] && XCODE=/Applications/Xcode.app
+          echo "Using $XCODE"
+          sudo xcode-select -s "$XCODE"
           xcodebuild -version
           swift --version
+          # Xcode 16.3+ ships the Metal toolchain as a separate download.
+          if ! xcrun metal --version >/dev/null 2>&1; then
+            echo "Metal toolchain missing; downloading..."
+            xcodebuild -downloadComponent MetalToolchain
+          fi
 
       - name: Build XCFramework (all platforms)
         env:
