@@ -1,8 +1,16 @@
 #!/usr/bin/env bash
-# Builds StableAudioKit.xcframework with all transitive dependencies (mlx-swift,
-# swift-sentencepiece) statically bundled into a single static framework binary.
-# Produces one slice per platform/destination and combines them with
-# xcodebuild -create-xcframework.
+# Builds StableAudioKit.xcframework.
+#
+# Default ("externalized") mode: only StableAudioKit's own object is merged into
+# the static framework binary; MLX and swift-sentencepiece symbols are left
+# UNDEFINED. A SwiftPM wrapper (Package.swift + helper target) is emitted next to
+# the xcframework so consumers link a single shared mlx-swift at their final link
+# step — avoiding a second copy of MLX in a process that also uses mlx-swift.
+#
+# Self-contained mode (STABLEAUDIO_SELFCONTAINED=1): the legacy behaviour — all
+# transitive dependencies are statically bundled into one self-contained binary
+# with no external dependencies. Use this only for hosts that never link MLX
+# themselves.
 #
 # Usage:
 #   ./Scripts/build-xcframework.sh [output_dir] [platform...]
@@ -12,8 +20,11 @@
 #   ./Scripts/build-xcframework.sh                         # all platforms
 #   ./Scripts/build-xcframework.sh build/out macos         # macOS only
 #   ./Scripts/build-xcframework.sh build/out macos ios ios-simulator
+#   STABLEAUDIO_SELFCONTAINED=1 ./Scripts/build-xcframework.sh  # legacy bundle
 #
 # Output: <output_dir>/StableAudioKit.xcframework (default: build/xcframework)
+#   plus, in externalized mode, <output_dir>/Package.swift and
+#   <output_dir>/Sources/ for the SwiftPM wrapper.
 #
 # Requirements: macOS with Xcode 15+ command line tools. Package.swift declares
 # the public mlx-swift fork by URL. By default this script rewrites it to the
@@ -45,6 +56,14 @@ MLXSWIFT_URL="https://github.com/olilarkin/mlx-swift"
 MLXSWIFT_BRANCH="${MLXSWIFT_BRANCH:-main}"
 MLXSWIFT_LOCAL_DIR="$PACKAGE_DIR/../mlx-swift"
 MLXSWIFT_USE_REMOTE="${MLXSWIFT_USE_REMOTE:-}"
+
+# swift-sentencepiece dependency, externalized into the wrapper alongside MLX.
+SENTENCEPIECE_URL="https://github.com/jkrukowski/swift-sentencepiece"
+SENTENCEPIECE_REVISION="b968826b1d3b76e37359abdbe2f4c0daaa96a50a"
+
+# When set to 1, statically bundle every dependency into the framework binary
+# (legacy, self-contained). Default: externalize MLX/sentencepiece + emit wrapper.
+STABLEAUDIO_SELFCONTAINED="${STABLEAUDIO_SELFCONTAINED:-}"
 
 # The package's Sources/StableAudioKit module name as exposed to Swift consumers.
 MODULE_NAME="StableAudioKit"
@@ -157,26 +176,49 @@ build_slice() {
     fi
     echo "    products: $products"
 
-    # Collect every linked target object/static archive produced by the package
-    # build. Recent Xcode SwiftPM builds emit Swift/C/C++ targets as <Target>.o
-    # files and C archives such as libSentencepiece.a in the products directory.
     local merge_input
     merge_input="$WORK_DIR/merge-$id"
     rm -rf "$merge_input"
     mkdir -p "$merge_input"
 
     local link_inputs=()
-    while IFS= read -r -d '' input; do
-        link_inputs+=("$input")
-    done < <(find "$products" -maxdepth 1 \( -name "*.o" -o -name "*.a" \) -print0)
+    if [[ "$STABLEAUDIO_SELFCONTAINED" == "1" ]]; then
+        # Self-contained: merge every linked target object/static archive the
+        # build produced. Recent Xcode SwiftPM builds emit Swift/C/C++ targets as
+        # <Target>.o files and C archives such as libSentencepiece.a.
+        while IFS= read -r -d '' input; do
+            link_inputs+=("$input")
+        done < <(find "$products" -maxdepth 1 \( -name "*.o" -o -name "*.a" \) -print0)
 
-    # Some SPM builds bury archives under PackageFrameworks; pick those up too.
-    while IFS= read -r -d '' lib; do
-        link_inputs+=("$lib")
-    done < <(find "$derived/Build/Intermediates.noindex" -name "*.a" -print0 2>/dev/null)
+        # Some SPM builds bury archives under PackageFrameworks; pick those up too.
+        while IFS= read -r -d '' lib; do
+            link_inputs+=("$lib")
+        done < <(find "$derived/Build/Intermediates.noindex" -name "*.a" -print0 2>/dev/null)
+    else
+        # Externalized: merge ONLY StableAudioKit's own object so MLX and
+        # sentencepiece symbols stay undefined, to be resolved by the consumer's
+        # shared mlx-swift at their final link step (see the emitted wrapper).
+        while IFS= read -r -d '' input; do
+            link_inputs+=("$input")
+        done < <(find "$products" -maxdepth 1 -name "$MODULE_NAME.o" -print0)
+        if [[ ${#link_inputs[@]} -eq 0 ]]; then
+            # Fallback: some toolchains place the target object under Intermediates.
+            # Take only the first match — multiple would be per-arch duplicates and
+            # merging them would produce duplicate-symbol errors.
+            local fallback_obj
+            fallback_obj="$(find "$derived/Build/Intermediates.noindex" \
+                -name "$MODULE_NAME.o" -print -quit 2>/dev/null)"
+            [[ -n "$fallback_obj" ]] && link_inputs+=("$fallback_obj")
+        fi
+    fi
 
     if [[ ${#link_inputs[@]} -eq 0 ]]; then
         echo "error: No link inputs found for slice $id." >&2
+        if [[ "$STABLEAUDIO_SELFCONTAINED" != "1" ]]; then
+            echo "       Looked for $MODULE_NAME.o under:" >&2
+            echo "         $products" >&2
+            echo "         $derived/Build/Intermediates.noindex" >&2
+        fi
         exit 1
     fi
 
@@ -261,10 +303,14 @@ build_slice() {
     METAL_TARGET="$metal_target" MLX_SWIFT_DIR="$mlx_checkout" \
         "$COMPILE_METALLIB" "$fw" >/dev/null
 
-    # Copy any *.bundle resources produced by SPM dependencies (e.g. sentencepiece).
-    while IFS= read -r -d '' bundle; do
-        cp -R "$bundle" "$fw/"
-    done < <(find "$products" -maxdepth 2 -type d -name "*.bundle" -print0)
+    # In self-contained mode, copy any *.bundle resources produced by SPM
+    # dependencies (e.g. sentencepiece). In externalized mode the consumer's
+    # SwiftPM build provides those bundles, so we ship only our own metallib.
+    if [[ "$STABLEAUDIO_SELFCONTAINED" == "1" ]]; then
+        while IFS= read -r -d '' bundle; do
+            cp -R "$bundle" "$fw/"
+        done < <(find "$products" -maxdepth 2 -type d -name "*.bundle" -print0)
+    fi
 
     echo "    slice ready: $fw"
 }
@@ -322,3 +368,70 @@ xcodebuild -create-xcframework \
 
 echo ""
 echo "Done: $XCFRAMEWORK_PATH"
+
+# --- Emit the SwiftPM wrapper (externalized mode only) ---
+#
+# The xcframework's binary deliberately leaves MLX / sentencepiece symbols
+# undefined. A binaryTarget cannot declare package dependencies, so we ship a
+# thin wrapper package: the public library product bundles the binaryTarget plus
+# a helper target whose only job is to drag the shared mlx-swift / sentencepiece
+# into the consumer's link graph. SwiftPM then resolves a single MLX across the
+# whole dependency graph and the undefined symbols are satisfied at the final
+# link step — one copy of MLX in the process.
+
+if [[ "$STABLEAUDIO_SELFCONTAINED" != "1" ]]; then
+    echo ""
+    echo "==> Emitting SwiftPM wrapper"
+
+    WRAPPER_LINK_DIR="$OUTPUT_DIR/Sources/StableAudioKitLink"
+    mkdir -p "$WRAPPER_LINK_DIR"
+
+    cat > "$OUTPUT_DIR/Package.swift" <<EOF
+// swift-tools-version: 5.9
+// Generated by Scripts/build-xcframework.sh — wrapper for the binary
+// StableAudioKit.xcframework. Consumers add this package; SwiftPM links a single
+// shared mlx-swift so MLX is not duplicated in the process.
+
+import PackageDescription
+
+let package = Package(
+    name: "StableAudioKit",
+    platforms: [
+        .macOS(.v14),
+        .iOS(.v17),
+        .visionOS(.v1),
+    ],
+    products: [
+        .library(name: "StableAudioKit", targets: ["StableAudioKitBinary", "StableAudioKitLink"]),
+    ],
+    dependencies: [
+        .package(url: "$MLXSWIFT_URL", branch: "$MLXSWIFT_BRANCH"),
+        .package(url: "$SENTENCEPIECE_URL", revision: "$SENTENCEPIECE_REVISION"),
+    ],
+    targets: [
+        .binaryTarget(name: "StableAudioKitBinary", path: "StableAudioKit.xcframework"),
+        // Source-less linker shim: pulls the shared dependencies into the link so
+        // the binary framework's undefined MLX / sentencepiece symbols resolve.
+        .target(
+            name: "StableAudioKitLink",
+            dependencies: [
+                .product(name: "MLX", package: "mlx-swift"),
+                .product(name: "MLXNN", package: "mlx-swift"),
+                .product(name: "MLXRandom", package: "mlx-swift"),
+                .product(name: "MLXFast", package: "mlx-swift"),
+                .product(name: "SentencepieceTokenizer", package: "swift-sentencepiece"),
+            ]
+        ),
+    ]
+)
+EOF
+
+    cat > "$WRAPPER_LINK_DIR/Link.swift" <<'EOF'
+// Intentionally minimal. This target exists only so the wrapper's library
+// product links mlx-swift and swift-sentencepiece, resolving the undefined
+// symbols in StableAudioKit.xcframework. Consumers `import StableAudioKit`
+// (the binary framework module), not this module.
+EOF
+
+    echo "    wrapper: $OUTPUT_DIR/Package.swift"
+fi

@@ -185,6 +185,7 @@ public actor StableAudioPipeline {
     private var cachedSAMELEncoder: SAMELEncoder?
 
     public init(weightsDirectory: URL) throws {
+        MLXRuntime.ensureConfigured()
         self.weights = try StableAudioWeights(directory: weightsDirectory)
         try self.weights.requireReady()
     }

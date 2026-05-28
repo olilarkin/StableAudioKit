@@ -269,3 +269,12 @@ Inpainting requires the same SAME encoder weights as audio-to-audio — prepare 
 ## Current Scope
 
 The package API intentionally separates model loading, request configuration, sampling, and audio writing. Inference modes currently supported: text-to-audio, audio-to-audio, and inpainting / continuation. All three modes are exposed through both the Swift `StableAudioPipeline` API and the C ABI declared in `Scripts/xcframework-resources/StableAudioKit.h` (entry points `stable_audio_generate`, `stable_audio_generate_a2a`, `stable_audio_generate_inpaint`). Both surfaces ship in every slice of the `StableAudioKit.xcframework` produced by `Scripts/build-xcframework.sh` (macOS, iOS, iOS-simulator, visionOS, visionOS-simulator).
+
+## XCFramework distribution
+
+`Scripts/build-xcframework.sh` has two modes:
+
+- **Externalized (default).** The framework binary contains only StableAudioKit's own code; MLX and swift-sentencepiece symbols are left undefined. The script also emits a SwiftPM wrapper (`Package.swift` + a `StableAudioKitLink` helper target) next to the xcframework. Consumers add that package and SwiftPM resolves a **single shared mlx-swift** across the whole graph, so an app that itself uses MLX does not end up with two copies of the library in one process. The embedded `mlx.metallib` is located at runtime via the fork's `GPU.setMetallibPath` (wired in `MLXRuntime`); from a non-standard host you can override it with `MLXRuntime.setMetallibPath(_:)` before the first pipeline call.
+- **Self-contained (`STABLEAUDIO_SELFCONTAINED=1`).** Every dependency is statically bundled into one framework with no external dependencies. Use this only for hosts that never link MLX themselves — otherwise you hit the duplicate-MLX problem described in the mlx-swift README.
+
+Non-SwiftPM consumers (e.g. dragging the xcframework into an Xcode project) using the externalized build must add mlx-swift and swift-sentencepiece to that project themselves so the undefined symbols resolve at link time.
