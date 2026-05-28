@@ -275,14 +275,18 @@ for entry in "${SLICES[@]}"; do
     IFS='|' read -r id _rest <<<"$entry"
     VALID_IDS+=("$id")
 done
-for p in "${PLATFORM_FILTER[@]}"; do
-    found=0
-    for v in "${VALID_IDS[@]}"; do [[ "$p" == "$v" ]] && found=1 && break; done
-    if [[ $found -eq 0 ]]; then
-        echo "error: unknown platform '$p'. Valid values: ${VALID_IDS[*]}" >&2
-        exit 1
-    fi
-done
+# Guard the expansion: under `set -u`, macOS's bash 3.2 treats "${arr[@]}"
+# on an empty array as an unbound variable, which aborts an all-platforms run.
+if [[ ${#PLATFORM_FILTER[@]} -gt 0 ]]; then
+    for p in "${PLATFORM_FILTER[@]}"; do
+        found=0
+        for v in "${VALID_IDS[@]}"; do [[ "$p" == "$v" ]] && found=1 && break; done
+        if [[ $found -eq 0 ]]; then
+            echo "error: unknown platform '$p'. Valid values: ${VALID_IDS[*]}" >&2
+            exit 1
+        fi
+    done
+fi
 
 for entry in "${SLICES[@]}"; do
     IFS='|' read -r id dest sdk min_os triple_prefix metal_target_prefix <<<"$entry"
