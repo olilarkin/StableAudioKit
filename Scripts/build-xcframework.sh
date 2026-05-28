@@ -15,9 +15,10 @@
 #
 # Output: <output_dir>/StableAudioKit.xcframework (default: build/xcframework)
 #
-# Requirements: macOS with Xcode 15+ command line tools. By default the script
-# uses the local ../mlx-swift checkout when present. Set MLXSWIFT_USE_REMOTE=1
-# to temporarily rewrite Package.swift to use the upstream git URL instead.
+# Requirements: macOS with Xcode 15+ command line tools. Package.swift declares
+# the public mlx-swift fork by URL. By default this script rewrites it to the
+# local ../mlx-swift checkout when present (faster iteration); set
+# MLXSWIFT_USE_REMOTE=1 to force the remote fork URL instead.
 
 set -euo pipefail
 
@@ -85,28 +86,36 @@ trap restore_package EXIT
 
 if [[ -d "$MLXSWIFT_LOCAL_DIR" && "$MLXSWIFT_USE_REMOTE" != "1" ]]; then
     echo "Using local mlx-swift checkout: $MLXSWIFT_LOCAL_DIR"
+    REWRITE_MODE="local"
 else
     echo "Using remote mlx-swift package: $MLXSWIFT_URL ($MLXSWIFT_BRANCH)"
-    cp "$PACKAGE_FILE" "$PACKAGE_BACKUP"
-    if [[ -f "$RESOLVED_FILE" ]]; then
-        cp "$RESOLVED_FILE" "$RESOLVED_BACKUP"
-    fi
+    REWRITE_MODE="remote"
+fi
 
-    python3 - "$PACKAGE_FILE" "$MLXSWIFT_URL" "$MLXSWIFT_BRANCH" <<'PY'
+# Package.swift declares the remote fork by URL. Back it up and rewrite the
+# mlx-swift dependency to match the selected mode; the EXIT trap restores it.
+cp "$PACKAGE_FILE" "$PACKAGE_BACKUP"
+if [[ -f "$RESOLVED_FILE" ]]; then
+    cp "$RESOLVED_FILE" "$RESOLVED_BACKUP"
+fi
+
+python3 - "$PACKAGE_FILE" "$REWRITE_MODE" "$MLXSWIFT_URL" "$MLXSWIFT_BRANCH" <<'PY'
 import re, sys, pathlib
-path, url, branch = sys.argv[1], sys.argv[2], sys.argv[3]
+path, mode, url, branch = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 src = pathlib.Path(path).read_text()
-new = re.sub(
-    r'\.package\(\s*path:\s*"\.\./mlx-swift"\s*\)',
-    f'.package(url: "{url}", branch: "{branch}")',
-    src,
+# Match either the local path form or the remote url+branch form.
+dep_re = (
+    r'\.package\(\s*(?:path:\s*"\.\./mlx-swift"'
+    r'|url:\s*"[^"]*mlx-swift"\s*,\s*branch:\s*"[^"]*")\s*\)'
 )
+repl = '.package(path: "../mlx-swift")' if mode == "local" \
+    else f'.package(url: "{url}", branch: "{branch}")'
+new = re.sub(dep_re, repl, src)
 if new == src:
-    print("warn: no ../mlx-swift path dependency found in Package.swift to rewrite",
+    print("warn: no mlx-swift dependency found in Package.swift to rewrite",
           file=sys.stderr)
 pathlib.Path(path).write_text(new)
 PY
-fi
 
 # --- Build each slice ---
 

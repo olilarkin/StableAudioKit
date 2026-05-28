@@ -14,7 +14,7 @@ let package = Package(
         .executable(name: "StableAudioCLI", targets: ["StableAudioCLI"]),
     ],
     dependencies: [
-        .package(path: "../mlx-swift"),
+        .package(url: "https://github.com/olilarkin/mlx-swift", branch: "main"),
         .package(url: "https://github.com/jkrukowski/swift-sentencepiece", revision: "b968826b1d3b76e37359abdbe2f4c0daaa96a50a"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
     ],
